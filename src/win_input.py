@@ -172,13 +172,24 @@ def high_res_sleep(duration_seconds: float):
                 pass
             break
 
+VkKeyScanW = user32.VkKeyScanW
+VkKeyScanW.argtypes = [wintypes.WCHAR]
+VkKeyScanW.restype = wintypes.SHORT
+
 class WinInputEngine:
     """Provides low-level mouse and keyboard actions via Win32 SendInput."""
 
     @staticmethod
     def get_vk(key_name: str) -> int:
         norm = str(key_name).strip().lower()
-        return VK_MAP.get(norm, 0)
+        if norm in VK_MAP:
+            return VK_MAP[norm]
+        # Fallback to Win32 VkKeyScanW for characters not explicitly in VK_MAP (e.g. è, é, _, &, accents, symbols)
+        if len(key_name) == 1:
+            res = VkKeyScanW(key_name)
+            if res != -1:
+                return res & 0xFF
+        return 0
 
     @staticmethod
     def get_scancode(vk: int) -> int:

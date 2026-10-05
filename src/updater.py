@@ -154,13 +154,15 @@ class AutoUpdater:
                 on_complete()
 
             # Launch installer with flags:
-            # /VERYSILENT: Install without showing wizard steps
+            # /SILENT / /VERYSILENT: Install without showing wizard steps
+            # /SUPPRESSMSGBOXES: Never block or wait on message boxes
             # /CURRENTUSER: Install to user directory (no admin UAC prompt needed)
             # /NORESTART: Don't reboot PC
             # /MERGETASKS="desktopicon": Keep desktop shortcut
             install_cmd = [
                 target_file,
                 "/SILENT",
+                "/SUPPRESSMSGBOXES",
                 "/CURRENTUSER",
                 "/NORESTART",
                 "/MERGETASKS=desktopicon"

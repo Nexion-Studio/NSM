@@ -2,6 +2,8 @@
 NSM - Nexion Studio Macro
 App API Bridge - Connects Python Backend to pywebview JS Frontend
 Handles persistence, window operations, presets, real-time telemetry, and auto-updates.
+All internal engine and window attributes are prefixed with an underscore to prevent pywebview
+from attempting to reflect/serialize native COM objects over the JS-Python RPC bridge.
 """
 
 import json
@@ -104,26 +106,26 @@ class NSMAppAPI:
     """API exposed to WebView JavaScript via window.pywebview.api."""
 
     def __init__(self):
-        self.window: Optional[webview.Window] = None
-        self.engine = MacroEngine(on_state_change=self._on_macro_state_change)
-        self.hotkeys = GlobalHotkeyManager(
+        self._window: Optional[webview.Window] = None
+        self._engine = MacroEngine(on_state_change=self._on_macro_state_change)
+        self._hotkeys = GlobalHotkeyManager(
             panic_callback=self._on_panic_pressed,
             macro_toggle_callback=self._on_macro_toggle_pressed,
             macro_hold_callback=self._on_macro_hold_pressed
         )
-        self.updater = AutoUpdater(on_update_found=self._on_update_found)
+        self._updater = AutoUpdater(on_update_found=self._on_update_found)
 
-        self.panic_hotkey = "f10"
-        self.always_on_top = False
-        self.sound_enabled = True
+        self._panic_hotkey = "f10"
+        self._always_on_top = False
+        self._sound_enabled = True
 
         self._load_config()
-        self.hotkeys.start()
+        self._hotkeys.start()
 
     def set_window(self, window: webview.Window):
-        self.window = window
+        self._window = window
         # Trigger background update check after 3 seconds
-        self.updater.start_background_check(delay=3.0)
+        self._updater.start_background_check(delay=3.0)
 
     def _load_config(self):
         os.makedirs(APPDATA_DIR, exist_ok=True)
@@ -131,33 +133,33 @@ class NSMAppAPI:
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                    self.panic_hotkey = data.get("panic_hotkey", "f10")
-                    self.always_on_top = data.get("always_on_top", False)
-                    self.sound_enabled = data.get("sound_enabled", True)
+                    self._panic_hotkey = data.get("panic_hotkey", "f10")
+                    self._always_on_top = data.get("always_on_top", False)
+                    self._sound_enabled = data.get("sound_enabled", True)
                     macros = data.get("macros", [])
                     for m in macros:
-                        self.engine.add_or_update_macro(m)
-                        self.hotkeys.register_macro(m["id"], m.get("hotkey", ""), m.get("mode", "toggle"), m.get("enabled", True))
-                    self.hotkeys.set_panic_hotkey(self.panic_hotkey)
+                        self._engine.add_or_update_macro(m)
+                        self._hotkeys.register_macro(m["id"], m.get("hotkey", ""), m.get("mode", "toggle"), m.get("enabled", True))
+                    self._hotkeys.set_panic_hotkey(self._panic_hotkey)
                     return
             except Exception as e:
                 print(f"[NSM] Failed to load config: {e}")
 
         # Fallback to default presets
         for m in DEFAULT_PRESETS:
-            self.engine.add_or_update_macro(dict(m))
-            self.hotkeys.register_macro(m["id"], m.get("hotkey", ""), m.get("mode", "toggle"), m.get("enabled", True))
-        self.hotkeys.set_panic_hotkey(self.panic_hotkey)
+            self._engine.add_or_update_macro(dict(m))
+            self._hotkeys.register_macro(m["id"], m.get("hotkey", ""), m.get("mode", "toggle"), m.get("enabled", True))
+        self._hotkeys.set_panic_hotkey(self._panic_hotkey)
         self._save_config()
 
     def _save_config(self):
         try:
             os.makedirs(APPDATA_DIR, exist_ok=True)
             data = {
-                "panic_hotkey": self.panic_hotkey,
-                "always_on_top": self.always_on_top,
-                "sound_enabled": self.sound_enabled,
-                "macros": list(self.engine.macros.values())
+                "panic_hotkey": self._panic_hotkey,
+                "always_on_top": self._always_on_top,
+                "sound_enabled": self._sound_enabled,
+                "macros": list(self._engine.macros.values())
             }
             with open(CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -166,75 +168,75 @@ class NSMAppAPI:
 
     # Callback handlers from engine, hotkeys & updater
     def _on_macro_state_change(self, macro_id: str, is_running: bool):
-        if self.window:
+        if self._window:
             try:
-                self.window.evaluate_js(f"window.onMacroStateChange && window.onMacroStateChange('{macro_id}', {str(is_running).lower()});")
+                self._window.evaluate_js(f"window.onMacroStateChange && window.onMacroStateChange('{macro_id}', {str(is_running).lower()});")
             except Exception:
                 pass
 
     def _on_panic_pressed(self):
-        self.engine.stop_all()
-        if self.window:
+        self._engine.stop_all()
+        if self._window:
             try:
-                self.window.evaluate_js("window.onPanicTriggered && window.onPanicTriggered();")
+                self._window.evaluate_js("window.onPanicTriggered && window.onPanicTriggered();")
             except Exception:
                 pass
 
     def _on_macro_toggle_pressed(self, macro_id: str):
-        self.engine.toggle_macro(macro_id)
+        self._engine.toggle_macro(macro_id)
 
     def _on_macro_hold_pressed(self, macro_id: str, is_pressed: bool):
         if is_pressed:
-            self.engine.start_macro(macro_id)
+            self._engine.start_macro(macro_id)
         else:
-            self.engine.stop_macro(macro_id)
+            self._engine.stop_macro(macro_id)
 
     def _on_update_found(self, update_info: Dict[str, Any]):
-        if self.window:
+        if self._window:
             try:
                 info_json = json.dumps(update_info)
-                self.window.evaluate_js(f"window.onUpdateAvailable && window.onUpdateAvailable({info_json});")
+                self._window.evaluate_js(f"window.onUpdateAvailable && window.onUpdateAvailable({info_json});")
             except Exception:
                 pass
 
-    # JS API Methods
+    # JS API Methods (Publicly callable from JavaScript)
     def get_initial_state(self) -> Dict[str, Any]:
         return {
             "version": CURRENT_VERSION,
-            "macros": list(self.engine.macros.values()),
-            "active_macro_ids": self.engine.get_active_macro_ids(),
-            "panic_hotkey": self.panic_hotkey,
-            "always_on_top": self.always_on_top,
-            "sound_enabled": self.sound_enabled,
-            "total_actions": self.engine.total_session_actions
+            "macros": list(self._engine.macros.values()),
+            "active_macro_ids": self._engine.get_active_macro_ids(),
+            "panic_hotkey": self._panic_hotkey,
+            "always_on_top": self._always_on_top,
+            "sound_enabled": self._sound_enabled,
+            "total_actions": self._engine.total_session_actions
         }
 
     def save_macro(self, macro_data: Dict[str, Any]) -> Dict[str, Any]:
-        m_id = self.engine.add_or_update_macro(macro_data)
-        self.hotkeys.register_macro(m_id, macro_data.get("hotkey", ""), macro_data.get("mode", "toggle"), macro_data.get("enabled", True))
+        m_id = self._engine.add_or_update_macro(macro_data)
+        self._hotkeys.register_macro(m_id, macro_data.get("hotkey", ""), macro_data.get("mode", "toggle"), macro_data.get("enabled", True))
         self._save_config()
         return {"success": True, "id": m_id}
 
     def delete_macro(self, macro_id: str) -> Dict[str, Any]:
-        self.engine.delete_macro(macro_id)
-        self.hotkeys.unregister_macro(macro_id)
+        self._engine.delete_macro(macro_id)
+        self._hotkeys.unregister_macro(macro_id)
         self._save_config()
         return {"success": True}
 
     def toggle_macro(self, macro_id: str) -> Dict[str, Any]:
-        is_running = self.engine.toggle_macro(macro_id)
+        is_running = self._engine.toggle_macro(macro_id)
         return {"success": True, "is_running": is_running}
 
     def start_macro(self, macro_id: str) -> Dict[str, Any]:
-        success = self.engine.start_macro(macro_id)
+        success = self._engine.start_macro(macro_id)
         return {"success": success}
 
     def stop_macro(self, macro_id: str) -> Dict[str, Any]:
-        success = self.engine.stop_macro(macro_id)
+        success = self._engine.stop_macro(macro_id)
         return {"success": success}
 
     def stop_all(self) -> Dict[str, Any]:
-        self.engine.stop_all()
+        self._engine.stop_all()
         return {"success": True}
 
     def record_hotkey(self) -> str:
@@ -246,84 +248,84 @@ class NSMAppAPI:
             captured.append(key_str)
             evt.set()
 
-        self.hotkeys.start_recording(on_captured)
+        self._hotkeys.start_recording(on_captured)
         evt.wait(timeout=10.0)  # Wait up to 10 seconds
-        self.hotkeys.cancel_recording()
+        self._hotkeys.cancel_recording()
 
         if captured:
             return captured[0]
         return ""
 
     def cancel_record_hotkey(self) -> Dict[str, Any]:
-        self.hotkeys.cancel_recording()
+        self._hotkeys.cancel_recording()
         return {"success": True}
 
     def set_panic_hotkey(self, hotkey: str) -> Dict[str, Any]:
-        self.panic_hotkey = hotkey.strip().lower()
-        self.hotkeys.set_panic_hotkey(self.panic_hotkey)
+        self._panic_hotkey = hotkey.strip().lower()
+        self._hotkeys.set_panic_hotkey(self._panic_hotkey)
         self._save_config()
-        return {"success": True, "panic_hotkey": self.panic_hotkey}
+        return {"success": True, "panic_hotkey": self._panic_hotkey}
 
     def toggle_always_on_top(self) -> bool:
-        self.always_on_top = not self.always_on_top
-        if self.window:
+        self._always_on_top = not self._always_on_top
+        if self._window:
             try:
-                self.window.on_top = self.always_on_top
+                self._window.on_top = self._always_on_top
             except Exception:
                 pass
         self._save_config()
-        return self.always_on_top
+        return self._always_on_top
 
     def toggle_sound(self) -> bool:
-        self.sound_enabled = not self.sound_enabled
+        self._sound_enabled = not self._sound_enabled
         self._save_config()
-        return self.sound_enabled
+        return self._sound_enabled
 
     def reset_default_presets(self) -> Dict[str, Any]:
-        self.engine.stop_all()
-        for m in list(self.engine.macros.keys()):
-            self.hotkeys.unregister_macro(m)
-        self.engine.macros.clear()
+        self._engine.stop_all()
+        for m in list(self._engine.macros.keys()):
+            self._hotkeys.unregister_macro(m)
+        self._engine.macros.clear()
 
         for m in DEFAULT_PRESETS:
-            self.engine.add_or_update_macro(dict(m))
-            self.hotkeys.register_macro(m["id"], m.get("hotkey", ""), m.get("mode", "toggle"), m.get("enabled", True))
+            self._engine.add_or_update_macro(dict(m))
+            self._hotkeys.register_macro(m["id"], m.get("hotkey", ""), m.get("mode", "toggle"), m.get("enabled", True))
         self._save_config()
-        return {"success": True, "macros": list(self.engine.macros.values())}
+        return {"success": True, "macros": list(self._engine.macros.values())}
 
     # Auto-Updater API
     def check_updates(self) -> Dict[str, Any]:
-        return self.updater.check_for_updates()
+        return self._updater.check_for_updates()
 
     def start_auto_update(self, download_url: str) -> Dict[str, Any]:
         def progress_cb(percent, downloaded, total):
-            if self.window:
+            if self._window:
                 try:
-                    self.window.evaluate_js(f"window.onUpdateProgress && window.onUpdateProgress({percent}, {downloaded}, {total});")
+                    self._window.evaluate_js(f"window.onUpdateProgress && window.onUpdateProgress({percent}, {downloaded}, {total});")
                 except Exception:
                     pass
 
         def on_done():
-            if self.window:
+            if self._window:
                 try:
-                    self.window.evaluate_js("window.onUpdateDownloaded && window.onUpdateDownloaded();")
+                    self._window.evaluate_js("window.onUpdateDownloaded && window.onUpdateDownloaded();")
                 except Exception:
                     pass
 
         def _thread():
-            self.updater.download_and_install(download_url, progress_callback=progress_cb, on_complete=on_done)
+            self._updater.download_and_install(download_url, progress_callback=progress_cb, on_complete=on_done)
 
         t = threading.Thread(target=_thread, daemon=True)
         t.start()
         return {"success": True}
 
     def minimize_window(self):
-        if self.window:
-            self.window.minimize()
+        if self._window:
+            self._window.minimize()
 
     def close_window(self):
-        self.engine.stop_all()
-        self.hotkeys.stop()
-        if self.window:
-            self.window.destroy()
+        self._engine.stop_all()
+        self._hotkeys.stop()
+        if self._window:
+            self._window.destroy()
         sys.exit(0)

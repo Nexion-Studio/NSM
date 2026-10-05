@@ -122,70 +122,76 @@ class GlobalHotkeyManager:
         return ""
 
     def _on_press(self, key):
-        key_str = normalize_key(key)
+        try:
+            key_str = normalize_key(key)
 
-        # Check for OS typematic key-repeat: if already pressed, IGNORE repeated down events!
-        is_repeat = key_str in self.pressed_keys
-        self.pressed_keys.add(key_str)
+            # Check for OS typematic key-repeat: if already pressed, IGNORE repeated down events!
+            is_repeat = key_str in self.pressed_keys
+            self.pressed_keys.add(key_str)
 
-        combo_str = self._get_current_combination_str()
+            combo_str = self._get_current_combination_str()
 
-        # Check if in recording mode
-        if self.recording_active:
-            if key_str not in ('ctrl', 'alt', 'shift') or len(self.pressed_keys) == 1:
-                cb = self.recording_callback
-                self.recording_active = False
-                self.recording_callback = None
-                if cb:
-                    cb(combo_str or key_str)
+            # Check if in recording mode
+            if self.recording_active:
+                if key_str not in ('ctrl', 'alt', 'shift') or len(self.pressed_keys) == 1:
+                    cb = self.recording_callback
+                    self.recording_active = False
+                    self.recording_callback = None
+                    if cb:
+                        cb(combo_str or key_str)
+                    return
+
+            # If it's a repeated keydown event from Windows typematic repeat, ignore it!
+            if is_repeat:
                 return
 
-        # If it's a repeated keydown event from Windows typematic repeat, ignore it!
-        if is_repeat:
-            return
+            now = time.perf_counter()
 
-        now = time.perf_counter()
-
-        # Check Emergency Panic Killswitch
-        if combo_str == self.panic_hotkey or key_str == self.panic_hotkey:
-            if now - self.last_panic_time > 0.25:
-                self.last_panic_time = now
-                if self.panic_callback:
-                    self.panic_callback()
-            return
-
-        # Check Registered Macro Hotkeys
-        with self.lock:
-            macro_id = self.hotkey_to_macro.get(combo_str) or self.hotkey_to_macro.get(key_str)
-            if not macro_id:
+            # Check Emergency Panic Killswitch
+            if combo_str == self.panic_hotkey or key_str == self.panic_hotkey:
+                if now - self.last_panic_time > 0.25:
+                    self.last_panic_time = now
+                    if self.panic_callback:
+                        self.panic_callback()
                 return
 
-            if not self.macro_enabled.get(macro_id, True):
-                return
+            # Check Registered Macro Hotkeys
+            with self.lock:
+                macro_id = self.hotkey_to_macro.get(combo_str) or self.hotkey_to_macro.get(key_str)
+                if not macro_id:
+                    return
 
-            mode = self.macro_modes.get(macro_id, "toggle")
+                if not self.macro_enabled.get(macro_id, True):
+                    return
 
-        if mode == "hold_key":
-            if self.macro_hold_callback:
-                self.macro_hold_callback(macro_id, True)
-        else:
-            # Debounce protection for toggle mode (minimum 250ms between toggles)
-            last_t = self.last_toggle_time.get(macro_id, 0.0)
-            if now - last_t >= 0.25:
-                self.last_toggle_time[macro_id] = now
-                if self.macro_toggle_callback:
-                    self.macro_toggle_callback(macro_id)
+                mode = self.macro_modes.get(macro_id, "toggle")
+
+            if mode == "hold_key":
+                if self.macro_hold_callback:
+                    self.macro_hold_callback(macro_id, True)
+            else:
+                # Debounce protection for toggle mode (minimum 250ms between toggles)
+                last_t = self.last_toggle_time.get(macro_id, 0.0)
+                if now - last_t >= 0.25:
+                    self.last_toggle_time[macro_id] = now
+                    if self.macro_toggle_callback:
+                        self.macro_toggle_callback(macro_id)
+        except Exception as e:
+            pass
 
     def _on_release(self, key):
-        key_str = normalize_key(key)
-        combo_str = self._get_current_combination_str()
+        try:
+            key_str = normalize_key(key)
+            combo_str = self._get_current_combination_str()
 
-        # If a hold-mode macro was active for this key/combo, signal release
-        with self.lock:
-            macro_id = self.hotkey_to_macro.get(combo_str) or self.hotkey_to_macro.get(key_str)
-            if macro_id:
-                mode = self.macro_modes.get(macro_id, "toggle")
-                if mode == "hold_key" and self.macro_hold_callback:
-                    self.macro_hold_callback(macro_id, False)
+            # If a hold-mode macro was active for this key/combo, signal release
+            with self.lock:
+                macro_id = self.hotkey_to_macro.get(combo_str) or self.hotkey_to_macro.get(key_str)
+                if macro_id:
+                    mode = self.macro_modes.get(macro_id, "toggle")
+                    if mode == "hold_key" and self.macro_hold_callback:
+                        self.macro_hold_callback(macro_id, False)
 
-        self.pressed_keys.discard(key_str)
+            self.pressed_keys.discard(key_str)
+        except Exception:
+            pass
