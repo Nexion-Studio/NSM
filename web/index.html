@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NSM - Nexion Studio Macro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Custom Futuristic Titlebar -->
+  <header class="titlebar" id="appTitlebar">
+    <div class="titlebar-drag">
+      <div class="titlebar-brand">
+        <img src="../assets/logo.png" alt="NSM Logo" class="brand-logo">
+        <div class="brand-text">
+          <span class="brand-name">NSM</span>
+          <span class="brand-subtitle">NEXION STUDIO MACRO</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="titlebar-actions">
+      <button class="tb-btn" id="btnSoundToggle" title="Activer / Couper le son">
+        <span class="tb-icon" id="soundIcon">🔊</span>
+      </button>
+      <button class="tb-btn" id="btnPinToggle" title="Garder au premier plan">
+        <span class="tb-icon" id="pinIcon">📌</span>
+      </button>
+      <button class="tb-btn" id="btnMinimize" title="Réduire">
+        <span class="tb-icon">🗕</span>
+      </button>
+      <button class="tb-btn tb-close" id="btnClose" title="Fermer">
+        <span class="tb-icon">✕</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-container">
+    <!-- Top Telemetry & Master Controls -->
+    <section class="telemetry-bar">
+      <!-- Status Card -->
+      <div class="telemetry-card status-card" id="statusCard">
+        <div class="status-indicator" id="statusIndicator"></div>
+        <div class="status-info">
+          <span class="telemetry-label">STATUT SYSTÈME</span>
+          <span class="status-value" id="statusText">PRÊT</span>
+        </div>
+      </div>
+
+      <!-- Quick Stats -->
+      <div class="telemetry-card stat-item">
+        <span class="stat-number" id="activeMacrosCount">0</span>
+        <span class="telemetry-label">MACROS ACTIVES</span>
+      </div>
+
+      <div class="telemetry-card stat-item">
+        <span class="stat-number" id="totalActionsCount">0</span>
+        <span class="telemetry-label">ACTIONS EXÉCUTÉES</span>
+      </div>
+
+      <div class="telemetry-card stat-item">
+        <span class="stat-number" id="liveCPS">0.0</span>
+        <span class="telemetry-label">CPS ACTUEL</span>
+      </div>
+
+      <!-- Emergency Panic Killswitch -->
+      <button class="panic-button" id="btnPanicKill" title="Arrêter immédiatement toutes les macros">
+        <div class="panic-glow"></div>
+        <div class="panic-content">
+          <span class="panic-icon">⚠️</span>
+          <div class="panic-labels">
+            <span class="panic-title">ARRÊT D'URGENCE</span>
+            <span class="panic-key" id="panicKeyBadge">TOUCHE [F10]</span>
+          </div>
+        </div>
+      </button>
+    </section>
+
+    <!-- Controls Subheader & Filters -->
+    <section class="toolbar">
+      <div class="filter-tabs">
+        <button class="filter-btn active" data-filter="all">Toutes (<span id="countAll">0</span>)</button>
+        <button class="filter-btn" data-filter="spam">⚡ Autoclickers (<span id="countSpam">0</span>)</button>
+        <button class="filter-btn" data-filter="hold">🏃 Maintien (<span id="countHold">0</span>)</button>
+        <button class="filter-btn" data-filter="active">🟢 En cours (<span id="countActive">0</span>)</button>
+      </div>
+
+      <div class="toolbar-actions">
+        <button class="btn-secondary" id="btnResetPresets" title="Réinitialiser les modèles officiels Nexion Studio">
+          <span>🔄 Modèles Prédéfinis</span>
+        </button>
+        <button class="btn-primary" id="btnNewMacro">
+          <span class="btn-icon">➕</span>
+          <span>Créer une Macro</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Macro Cards Grid -->
+    <section class="macros-grid" id="macrosGrid">
+      <!-- Injected dynamically by JS -->
+    </section>
+
+    <!-- Empty State -->
+    <div class="empty-state" id="emptyState" style="display: none;">
+      <div class="empty-icon">⚡</div>
+      <h3>Aucune macro trouvée</h3>
+      <p>Créez votre première macro ou rechargez les modèles par défaut pour commencer !</p>
+      <button class="btn-primary" id="btnEmptyCreate">➕ Créer une Macro</button>
+    </div>
+  </main>
+
+  <!-- Macro Edit / Create Modal -->
+  <div class="modal-backdrop" id="macroModal" style="display: none;">
+    <div class="modal-window">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-tag" id="modalModeTag">CONFIGURATION</span>
+          <h2 id="modalTitle">Nouvelle Macro</h2>
+        </div>
+        <button class="modal-close" id="btnModalClose">✕</button>
+      </div>
+
+      <form class="modal-body" id="macroForm">
+        <input type="hidden" id="macroId">
+
+        <!-- Type Selector -->
+        <div class="form-group">
+          <label class="form-label">TYPE DE MACRO</label>
+          <div class="type-selector-tabs">
+            <label class="type-tab-option">
+              <input type="radio" name="macroType" value="spam" checked id="typeSpamRadio">
+              <div class="type-tab-card">
+                <span class="tab-icon">⚡</span>
+                <span class="tab-title">Spam / Autoclicker</span>
+                <span class="tab-desc">Répète des clics ou appuis ultra-rapides</span>
+              </div>
+            </label>
+            <label class="type-tab-option">
+              <input type="radio" name="macroType" value="hold" id="typeHoldRadio">
+              <div class="type-tab-card">
+                <span class="tab-icon">⏳</span>
+                <span class="tab-title">Appui Prolongé</span>
+                <span class="tab-desc">Maintient une touche enfoncée</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <!-- Name & Color -->
+        <div class="form-row">
+          <div class="form-group flex-2">
+            <label class="form-label" for="macroName">NOM DE LA MACRO</label>
+            <input type="text" id="macroName" class="form-input" placeholder="Ex: Autoclicker PvP Gauche" required>
+          </div>
+          <div class="form-group flex-1">
+            <label class="form-label">COULEUR ACCENT</label>
+            <div class="color-picker-row">
+              <input type="color" id="macroColor" class="color-picker-input" value="#00f2fe">
+              <span class="color-preview-name" id="colorCode">#00f2fe</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Target Target (Mouse or Keyboard) -->
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label class="form-label">PÉRIPHÉRIQUE CIBLE</label>
+            <div class="custom-select-group">
+              <select id="targetType" class="form-select">
+                <option value="mouse">🖱️ Souris (Clic / Bouton)</option>
+                <option value="keyboard">⌨️ Clavier (Touche)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Target Key Selector -->
+          <div class="form-group flex-1" id="mouseKeyGroup">
+            <label class="form-label">BOUTON SOURIS CIBLE</label>
+            <select id="mouseButtonSelect" class="form-select">
+              <option value="left">Clic Gauche (Primary)</option>
+              <option value="right">Clic Droit (Secondary)</option>
+              <option value="middle">Clic Molette (Middle)</option>
+              <option value="x1">Bouton Souris 4 (Précédent / Back)</option>
+              <option value="x2">Bouton Souris 5 (Suivant / Forward)</option>
+            </select>
+          </div>
+
+          <div class="form-group flex-1" id="keyboardKeyGroup" style="display: none;">
+            <label class="form-label">TOUCHE CLAVIER CIBLE</label>
+            <div class="key-target-wrapper">
+              <input type="text" id="keyboardKeyInput" class="form-input mono" placeholder="Ex: e, space, shift, f, 1" value="e">
+              <div class="quick-keys-list">
+                <span class="quick-chip" data-k="space">Espace</span>
+                <span class="quick-chip" data-k="shift">Shift</span>
+                <span class="quick-chip" data-k="ctrl">Ctrl</span>
+                <span class="quick-chip" data-k="e">E</span>
+                <span class="quick-chip" data-k="f">F</span>
+                <span class="quick-chip" data-k="q">Q</span>
+                <span class="quick-chip" data-k="z">Z</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SPAM Configuration Settings -->
+        <div id="spamSettingsGroup" class="settings-box">
+          <div class="box-title">PARAMÈTRES DU SPAM / VITESSE</div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <div class="label-with-badge">
+                <label class="form-label" for="intervalMs">INTERVALLE ENTRE CADA-CLIC (MS)</label>
+                <span class="badge-cps" id="cpsPreviewBadge">50 CPS</span>
+              </div>
+              <div class="slider-input-combo">
+                <input type="range" id="intervalSlider" class="form-range" min="1" max="500" value="20" step="1">
+                <input type="number" id="intervalMs" class="form-input mono small" min="1" max="100000" value="20">
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick CPS buttons -->
+          <div class="quick-cps-row">
+            <span class="quick-label">Préréglages de vitesse :</span>
+            <button type="button" class="btn-chip" data-interval="200" data-cps="5">5 CPS</button>
+            <button type="button" class="btn-chip" data-interval="100" data-cps="10">10 CPS</button>
+            <button type="button" class="btn-chip" data-interval="50" data-cps="20">20 CPS</button>
+            <button type="button" class="btn-chip active" data-interval="20" data-cps="50">50 CPS</button>
+            <button type="button" class="btn-chip" data-interval="10" data-cps="100">100 CPS</button>
+            <button type="button" class="btn-chip" data-interval="2" data-cps="MAX">MAX (1-2ms)</button>
+          </div>
+
+          <!-- Jitter / Randomization -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <div class="label-with-badge">
+                <label class="form-label" for="jitterSlider">VARIATION ALÉATOIRE / JITTER (ANTI-CHEAT)</label>
+                <span class="badge-value" id="jitterValBadge">0% (Régulier)</span>
+              </div>
+              <input type="range" id="jitterSlider" class="form-range" min="0" max="50" value="0" step="5">
+              <span class="field-hint">Ajoute une fluctuation naturelle au rythme pour contourner la détection de bots.</span>
+            </div>
+          </div>
+
+          <!-- Spam Execution Mode -->
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label">MODE D'ACTIVATION</label>
+              <select id="spamModeSelect" class="form-select">
+                <option value="toggle">Bascule On/Off (Appuyer sur la touche pour démarrer / arrêter)</option>
+                <option value="hold_key">Maintenir la touche enfoncée (Spam tant que le raccourci est pressé)</option>
+                <option value="repeat_count">Nombre fixe de clics</option>
+                <option value="time_limit">Durée chrono (en secondes)</option>
+              </select>
+            </div>
+
+            <div class="form-group flex-1" id="repeatCountGroup" style="display: none;">
+              <label class="form-label" for="repeatCountInput">NOMBRE DE RÉPÉTITIONS</label>
+              <input type="number" id="repeatCountInput" class="form-input mono" min="1" max="100000" value="100">
+            </div>
+
+            <div class="form-group flex-1" id="timeLimitGroup" style="display: none;">
+              <label class="form-label" for="timeLimitInput">DURÉE D'EXÉCUTION (SECONDES)</label>
+              <input type="number" id="timeLimitInput" class="form-input mono" min="1" max="3600" value="10">
+            </div>
+          </div>
+        </div>
+
+        <!-- HOLD Configuration Settings -->
+        <div id="holdSettingsGroup" class="settings-box" style="display: none;">
+          <div class="box-title">PARAMÈTRES D'APPUI PROLONGÉ (HOLD)</div>
+
+          <div class="form-row">
+            <div class="form-group flex-1">
+              <label class="form-label" for="holdDurationMs">DURÉE DU MAINTIEN ENFONCÉ (MS)</label>
+              <div class="slider-input-combo">
+                <input type="range" id="holdSlider" class="form-range" min="100" max="10000" value="3000" step="100">
+                <input type="number" id="holdDurationMs" class="form-input mono small" min="50" max="3600000" value="3000">
+              </div>
+              <span class="field-hint" id="holdDurationHint">3 secondes d'appui continu</span>
+            </div>
+
+            <div class="form-group flex-1">
+              <label class="form-label" for="releaseDelayMs">DÉLAI DE RELÂCHEMENT AVANT RE-PRESS (MS)</label>
+              <input type="number" id="releaseDelayMs" class="form-input mono" min="10" max="10000" value="50">
+              <span class="field-hint">Temps avant de réappuyer lors d'un cycle en boucle.</span>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="checkbox-card">
+              <input type="checkbox" id="holdLoopCheckbox" checked>
+              <label for="holdLoopCheckbox">
+                <strong>Répéter en boucle</strong>
+                <span>Maintient et relâche continuellement tant que la macro est active.</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hotkey Binding Box -->
+        <div class="settings-box hotkey-binding-box">
+          <div class="box-title">RACCOURCI CLAVIER D'ACTIVATION</div>
+          <div class="hotkey-recorder-row">
+            <div class="hotkey-display-chip" id="currentHotkeyDisplay">F6</div>
+            <button type="button" class="btn-record-hotkey" id="btnRecordHotkey">
+              <span class="record-dot"></span>
+              <span id="recordBtnText">Modifier le raccourci</span>
+            </button>
+            <input type="hidden" id="macroHotkey" value="f6">
+          </div>
+          <span class="field-hint">Appuyez sur n'importe quelle touche ou combinaison (F1-F12, lettres, Ctrl+Shift+1, etc.).</span>
+        </div>
+
+        <!-- Modal Footer Actions -->
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btnModalCancel">Annuler</button>
+          <button type="submit" class="btn-primary" id="btnModalSave">
+            <span>💾 Enregistrer la Macro</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Panic Key Config Modal -->
+  <div class="modal-backdrop" id="panicModal" style="display: none;">
+    <div class="modal-window modal-sm">
+      <div class="modal-header">
+        <h2>Arrêt d'Urgence (Killswitch)</h2>
+        <button class="modal-close" id="btnPanicModalClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <p>Le raccourci d'arrêt d'urgence coupe instantanément toutes les macros et relâche toutes les touches enfoncées.</p>
+        <div class="hotkey-recorder-row">
+          <div class="hotkey-display-chip danger" id="currentPanicDisplay">F10</div>
+          <button type="button" class="btn-record-hotkey danger" id="btnRecordPanicKey">
+            <span class="record-dot"></span>
+            <span id="recordPanicBtnText">Modifier la touche</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Audio Synthesizer & Web Audio Script -->
+  <script src="app.js"></script>
+</body>
+</html>

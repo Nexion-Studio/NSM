@@ -1,0 +1,27 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Build artifacts
+build/
+*.spec
+
+# Keep compiled installer outputs out of source git (they will be published via GitHub Releases)
+# To allow users to get them directly, we will upload NSM_Setup.exe to GitHub Releases.
+dist/
+dist_installer/
+
+# User configurations & local data
+config.json
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
