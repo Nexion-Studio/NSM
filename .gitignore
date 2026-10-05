@@ -12,6 +12,9 @@ build/
 dist/
 dist_installer/
 
+# GitHub workflows (requires workflow token scope)
+.github/
+
 # User configurations & local data
 config.json
 
