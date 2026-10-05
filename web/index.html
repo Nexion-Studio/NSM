@@ -374,10 +374,15 @@
 
           <!-- Form Actions -->
           <div class="creator-actions">
-            <button type="button" class="btn-secondary" id="btnCancelCreator">Annuler</button>
-            <button type="submit" class="btn-primary" id="btnSaveCreator">
-              <span>💾 Enregistrer & Activer</span>
+            <button type="button" class="btn-danger-text" id="btnDeleteFromCreator" style="display: none;">
+              <span>🗑️ Supprimer cette macro</span>
             </button>
+            <div class="creator-actions-right">
+              <button type="button" class="btn-secondary" id="btnCancelCreator">Annuler</button>
+              <button type="submit" class="btn-primary" id="btnSaveCreator">
+                <span>💾 Enregistrer & Activer</span>
+              </button>
+            </div>
           </div>
         </form>
       </div>
@@ -539,6 +544,40 @@
     </section>
 
   </main>
+
+  <!-- ================= DELETE CONFIRMATION MODAL ================= -->
+  <div class="modal-backdrop" id="deleteModal" style="display: none;">
+    <div class="modal-window modal-window-sm">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <span class="modal-tag tag-danger">CONFIRMATION DE SUPPRESSION</span>
+          <h2 id="deleteModalTitle">Supprimer cette macro ?</h2>
+        </div>
+        <button class="modal-close" id="btnCloseDeleteModal">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="update-hero">
+          <div class="update-icon-glow danger-icon">🗑️</div>
+          <div>
+            <h3 id="deleteMacroNameHeading">Nom de la macro</h3>
+            <p id="deleteMacroDetails">Voulez-vous vraiment supprimer définitivement cette macro ?</p>
+          </div>
+        </div>
+
+        <div class="danger-warning-box">
+          ⚠️ Cette action est irréversible. Les réglages et raccourcis clavier associés seront définitivement effacés.
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" id="btnCancelDelete">Annuler</button>
+          <button type="button" class="btn-danger-confirm" id="btnConfirmDelete">
+            <span>🗑️ Supprimer définitivement</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ================= UPDATE MODAL ================= -->
   <div class="modal-backdrop" id="updateModal" style="display: none;">

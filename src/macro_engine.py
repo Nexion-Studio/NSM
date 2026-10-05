@@ -230,7 +230,7 @@ class MacroEngine:
     def __init__(self, on_state_change: Optional[Callable] = None):
         self.macros: Dict[str, Dict[str, Any]] = {}
         self.active_runners: Dict[str, MacroRunner] = {}
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
         self.on_state_change = on_state_change
         self.total_session_actions = 0
 
@@ -242,8 +242,8 @@ class MacroEngine:
             return m_id
 
     def delete_macro(self, macro_id: str):
+        self.stop_macro(macro_id)
         with self.lock:
-            self.stop_macro(macro_id)
             if macro_id in self.macros:
                 del self.macros[macro_id]
 

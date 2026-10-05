@@ -239,6 +239,16 @@ class NSMApp {
     this.downloadStatusLabel = document.getElementById('downloadStatusLabel');
     this.downloadPercentLabel = document.getElementById('downloadPercentLabel');
     this.downloadProgressFill = document.getElementById('downloadProgressFill');
+
+    // Delete Modal
+    this.deleteModal = document.getElementById('deleteModal');
+    this.btnCloseDeleteModal = document.getElementById('btnCloseDeleteModal');
+    this.btnCancelDelete = document.getElementById('btnCancelDelete');
+    this.btnConfirmDelete = document.getElementById('btnConfirmDelete');
+    this.deleteMacroNameHeading = document.getElementById('deleteMacroNameHeading');
+    this.deleteMacroDetails = document.getElementById('deleteMacroDetails');
+    this.btnDeleteFromCreator = document.getElementById('btnDeleteFromCreator');
+    this.pendingDeleteId = null;
   }
 
   initEvents() {
@@ -381,6 +391,16 @@ class NSMApp {
     this.btnCloseUpdateModal.addEventListener('click', () => this.closeUpdateModal());
     this.btnCancelUpdate.addEventListener('click', () => this.closeUpdateModal());
     this.btnStartAutoUpdate.addEventListener('click', () => this.executeAutoUpdate());
+
+    // Delete Modal
+    this.btnCloseDeleteModal.addEventListener('click', () => this.closeDeleteModal());
+    this.btnCancelDelete.addEventListener('click', () => this.closeDeleteModal());
+    this.btnConfirmDelete.addEventListener('click', () => this.confirmDeleteMacro());
+    this.btnDeleteFromCreator.addEventListener('click', () => {
+      if (this.macroId.value) {
+        this.promptDeleteMacro(this.macroId.value);
+      }
+    });
 
     // Global Python Event Handlers
     window.onMacroStateChange = (macroId, isRunning) => {
@@ -709,7 +729,7 @@ class NSMApp {
 
       card.querySelector('[data-action="edit"]').addEventListener('click', () => this.openEditMode(m));
       card.querySelector('[data-action="copy"]').addEventListener('click', () => this.duplicateMacro(m));
-      card.querySelector('[data-action="del"]').addEventListener('click', () => this.deleteMacro(m.id));
+      card.querySelector('[data-action="del"]').addEventListener('click', () => this.promptDeleteMacro(m.id));
 
       this.macrosGrid.appendChild(card);
     });
@@ -720,16 +740,53 @@ class NSMApp {
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 
-  async deleteMacro(macroId) {
-    if (!confirm("Voulez-vous vraiment supprimer cette macro ?")) return;
+  promptDeleteMacro(macroId) {
+    const macro = this.macros.find(m => m.id === macroId);
+    if (!macro) return;
+    this.pendingDeleteId = macroId;
+    this.deleteMacroNameHeading.textContent = macro.name || 'Macro sans nom';
+    const typeLabel = macro.type === 'hold' ? 'Appui Prolongé' : 'Spam / Autoclick';
+    const hkLabel = macro.hotkey ? `Raccourci [${macro.hotkey.toUpperCase()}]` : 'Aucun raccourci';
+    this.deleteMacroDetails.textContent = `Type : ${typeLabel} • ${hkLabel}. Confirmez-vous la suppression ?`;
+    this.deleteModal.style.display = 'flex';
     this.sound.playClick();
-    if (this.api) {
-      await this.api.delete_macro(macroId);
-      this.macros = this.macros.filter(m => m.id !== macroId);
-      this.activeMacroIds.delete(macroId);
-      this.updateTelemetry();
-      this.renderMacros();
+  }
+
+  closeDeleteModal() {
+    this.deleteModal.style.display = 'none';
+    this.pendingDeleteId = null;
+  }
+
+  async confirmDeleteMacro() {
+    if (this.pendingDeleteId) {
+      const id = this.pendingDeleteId;
+      this.closeDeleteModal();
+      await this.executeDeleteMacro(id);
     }
+  }
+
+  async executeDeleteMacro(macroId) {
+    this.sound.playStop();
+    if (this.api) {
+      try {
+        await this.api.delete_macro(macroId);
+      } catch (err) {
+        console.error("Erreur lors de la suppression:", err);
+      }
+    }
+    this.macros = this.macros.filter(m => m.id !== macroId);
+    this.activeMacroIds.delete(macroId);
+    this.updateTelemetry();
+    this.renderMacros();
+
+    // If currently editing this macro in creator, switch back to dashboard
+    if (this.macroId.value === macroId) {
+      this.switchTab('tabDashboard');
+    }
+  }
+
+  deleteMacro(macroId) {
+    this.promptDeleteMacro(macroId);
   }
 
   async duplicateMacro(macro) {
@@ -750,6 +807,7 @@ class NSMApp {
     this.sound.playClick();
     this.creatorTitle.textContent = "Créer une Nouvelle Macro";
     this.creatorModeTag.textContent = "CRÉATION STUDIO";
+    this.btnDeleteFromCreator.style.display = 'none';
     this.macroId.value = '';
     this.macroName.value = `Macro #${this.macros.length + 1}`;
     this.macroColor.value = '#00f2fe';
@@ -785,6 +843,7 @@ class NSMApp {
     this.sound.playClick();
     this.creatorTitle.textContent = "Modifier la Macro";
     this.creatorModeTag.textContent = "ÉDITION STUDIO";
+    this.btnDeleteFromCreator.style.display = 'inline-flex';
     this.macroId.value = macro.id;
     this.macroName.value = macro.name;
     this.macroColor.value = macro.color || '#00f2fe';

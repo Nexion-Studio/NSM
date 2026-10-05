@@ -14,7 +14,7 @@ import subprocess
 import threading
 from typing import Dict, Any, Optional, Callable
 
-CURRENT_VERSION = "1.1.0"
+CURRENT_VERSION = "1.1.1"
 GITHUB_REPO = "Nexion-Studio/NSM"
 RELEASES_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 

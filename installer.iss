@@ -4,7 +4,7 @@
 
 #define MyAppName "NSM"
 #define MyAppFullName "Nexion Studio Macro"
-#define MyAppVersion "1.1.0"
+#define MyAppVersion "1.1.1"
 #define MyAppPublisher "Nexion Studio"
 #define MyAppURL "https://github.com/Nexion-Studio/NSM"
 #define MyAppExeName "NSM.exe"
