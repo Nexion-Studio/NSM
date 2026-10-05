@@ -1,7 +1,7 @@
 """
 NSM - Nexion Studio Macro
 App API Bridge - Connects Python Backend to pywebview JS Frontend
-Handles persistence, window operations, presets, and real-time state synchronization.
+Handles persistence, window operations, presets, real-time telemetry, and auto-updates.
 """
 
 import json
@@ -13,6 +13,7 @@ import webview
 
 from .macro_engine import MacroEngine
 from .hotkey_listener import GlobalHotkeyManager
+from .updater import AutoUpdater, CURRENT_VERSION
 
 # Path for persistent config in user AppData
 APPDATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "NexionStudio", "NSM")
@@ -110,6 +111,7 @@ class NSMAppAPI:
             macro_toggle_callback=self._on_macro_toggle_pressed,
             macro_hold_callback=self._on_macro_hold_pressed
         )
+        self.updater = AutoUpdater(on_update_found=self._on_update_found)
 
         self.panic_hotkey = "f10"
         self.always_on_top = False
@@ -120,6 +122,8 @@ class NSMAppAPI:
 
     def set_window(self, window: webview.Window):
         self.window = window
+        # Trigger background update check after 3 seconds
+        self.updater.start_background_check(delay=3.0)
 
     def _load_config(self):
         os.makedirs(APPDATA_DIR, exist_ok=True)
@@ -160,7 +164,7 @@ class NSMAppAPI:
         except Exception as e:
             print(f"[NSM] Failed to save config: {e}")
 
-    # Callback handlers from engine and hotkey listener
+    # Callback handlers from engine, hotkeys & updater
     def _on_macro_state_change(self, macro_id: str, is_running: bool):
         if self.window:
             try:
@@ -185,9 +189,18 @@ class NSMAppAPI:
         else:
             self.engine.stop_macro(macro_id)
 
+    def _on_update_found(self, update_info: Dict[str, Any]):
+        if self.window:
+            try:
+                info_json = json.dumps(update_info)
+                self.window.evaluate_js(f"window.onUpdateAvailable && window.onUpdateAvailable({info_json});")
+            except Exception:
+                pass
+
     # JS API Methods
     def get_initial_state(self) -> Dict[str, Any]:
         return {
+            "version": CURRENT_VERSION,
             "macros": list(self.engine.macros.values()),
             "active_macro_ids": self.engine.get_active_macro_ids(),
             "panic_hotkey": self.panic_hotkey,
@@ -277,6 +290,32 @@ class NSMAppAPI:
             self.hotkeys.register_macro(m["id"], m.get("hotkey", ""), m.get("mode", "toggle"), m.get("enabled", True))
         self._save_config()
         return {"success": True, "macros": list(self.engine.macros.values())}
+
+    # Auto-Updater API
+    def check_updates(self) -> Dict[str, Any]:
+        return self.updater.check_for_updates()
+
+    def start_auto_update(self, download_url: str) -> Dict[str, Any]:
+        def progress_cb(percent, downloaded, total):
+            if self.window:
+                try:
+                    self.window.evaluate_js(f"window.onUpdateProgress && window.onUpdateProgress({percent}, {downloaded}, {total});")
+                except Exception:
+                    pass
+
+        def on_done():
+            if self.window:
+                try:
+                    self.window.evaluate_js("window.onUpdateDownloaded && window.onUpdateDownloaded();")
+                except Exception:
+                    pass
+
+        def _thread():
+            self.updater.download_and_install(download_url, progress_callback=progress_cb, on_complete=on_done)
+
+        t = threading.Thread(target=_thread, daemon=True)
+        t.start()
+        return {"success": True}
 
     def minimize_window(self):
         if self.window:

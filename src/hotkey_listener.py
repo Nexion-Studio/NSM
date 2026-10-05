@@ -2,8 +2,10 @@
 NSM - Nexion Studio Macro
 Global Hotkey Listener with Key Recording & Hold/Toggle Routing
 Non-blocking background thread listening for global triggers and emergency killswitch.
+Includes typematic repeat filtering and debounce protection.
 """
 
+import time
 import threading
 from typing import Dict, Callable, Optional, Set
 from pynput import keyboard
@@ -23,7 +25,7 @@ def normalize_key(key) -> str:
         if key.char is not None and key.char.isprintable():
             return key.char.lower()
         elif key.vk is not None:
-            # Check virtual key code for F-keys or numbers
+            # Check virtual key code for F-keys (F1 = 112, F24 = 135)
             if 112 <= key.vk <= 135:
                 return f"f{key.vk - 111}"
             return f"vk_{key.vk}"
@@ -44,6 +46,9 @@ class GlobalHotkeyManager:
         self.macro_enabled: Dict[str, bool] = {}   # macro_id -> bool
 
         self.pressed_keys: Set[str] = set()
+        self.last_toggle_time: Dict[str, float] = {}
+        self.last_panic_time = 0.0
+
         self.recording_active = False
         self.recording_callback: Optional[Callable[[str], None]] = None
 
@@ -88,6 +93,7 @@ class GlobalHotkeyManager:
                 del self.hotkey_to_macro[k]
             self.macro_modes.pop(macro_id, None)
             self.macro_enabled.pop(macro_id, None)
+            self.last_toggle_time.pop(macro_id, None)
 
     def start_recording(self, callback: Callable[[str], None]):
         """Capture the next pressed hotkey combination and invoke callback."""
@@ -108,7 +114,7 @@ class GlobalHotkeyManager:
 
         non_modifiers = [k for k in self.pressed_keys if k not in ('ctrl', 'alt', 'shift')]
         if non_modifiers:
-            # Sort modifiers first, then the primary key
+            # Modifiers first, then the primary key
             combo = modifiers + [non_modifiers[-1]]
             return "+".join(combo)
         elif modifiers:
@@ -117,13 +123,15 @@ class GlobalHotkeyManager:
 
     def _on_press(self, key):
         key_str = normalize_key(key)
+
+        # Check for OS typematic key-repeat: if already pressed, IGNORE repeated down events!
+        is_repeat = key_str in self.pressed_keys
         self.pressed_keys.add(key_str)
 
         combo_str = self._get_current_combination_str()
 
         # Check if in recording mode
         if self.recording_active:
-            # If a non-modifier key was pressed or enter/space, complete recording
             if key_str not in ('ctrl', 'alt', 'shift') or len(self.pressed_keys) == 1:
                 cb = self.recording_callback
                 self.recording_active = False
@@ -132,10 +140,18 @@ class GlobalHotkeyManager:
                     cb(combo_str or key_str)
                 return
 
+        # If it's a repeated keydown event from Windows typematic repeat, ignore it!
+        if is_repeat:
+            return
+
+        now = time.perf_counter()
+
         # Check Emergency Panic Killswitch
         if combo_str == self.panic_hotkey or key_str == self.panic_hotkey:
-            if self.panic_callback:
-                self.panic_callback()
+            if now - self.last_panic_time > 0.25:
+                self.last_panic_time = now
+                if self.panic_callback:
+                    self.panic_callback()
             return
 
         # Check Registered Macro Hotkeys
@@ -153,8 +169,12 @@ class GlobalHotkeyManager:
             if self.macro_hold_callback:
                 self.macro_hold_callback(macro_id, True)
         else:
-            if self.macro_toggle_callback:
-                self.macro_toggle_callback(macro_id)
+            # Debounce protection for toggle mode (minimum 250ms between toggles)
+            last_t = self.last_toggle_time.get(macro_id, 0.0)
+            if now - last_t >= 0.25:
+                self.last_toggle_time[macro_id] = now
+                if self.macro_toggle_callback:
+                    self.macro_toggle_callback(macro_id)
 
     def _on_release(self, key):
         key_str = normalize_key(key)

@@ -1,7 +1,6 @@
 /**
- * NSM - Nexion Studio Macro
- * Frontend Application Controller
- * Handles UI events, Web Audio synthetic soundscapes, state syncing & API calls.
+ * NSM - Nexion Studio Macro Controller v2.0
+ * Multi-tab studio navigation, instant debounce toggle, CPS bench, and GitHub auto-updater.
  */
 
 class SoundSynthesizer {
@@ -28,9 +27,9 @@ class SoundSynthesizer {
     const gain = this.ctx.createGain();
     const now = this.ctx.currentTime;
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(540, now);
+    osc.frequency.setValueAtTime(520, now);
     osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
-    gain.gain.setValueAtTime(0.15, now);
+    gain.gain.setValueAtTime(0.14, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
     osc.connect(gain);
     gain.connect(this.ctx.destination);
@@ -47,13 +46,13 @@ class SoundSynthesizer {
     const now = this.ctx.currentTime;
     osc.type = 'sine';
     osc.frequency.setValueAtTime(800, now);
-    osc.frequency.exponentialRampToValueAtTime(400, now + 0.14);
+    osc.frequency.exponentialRampToValueAtTime(420, now + 0.12);
     gain.gain.setValueAtTime(0.12, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.14);
+    osc.stop(now + 0.12);
   }
 
   playPanic() {
@@ -66,8 +65,8 @@ class SoundSynthesizer {
       const gain = this.ctx.createGain();
       const t = now + i * 0.08;
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(320, t);
-      osc.frequency.linearRampToValueAtTime(200, t + 0.07);
+      osc.frequency.setValueAtTime(340, t);
+      osc.frequency.linearRampToValueAtTime(180, t + 0.07);
       gain.gain.setValueAtTime(0.2, t);
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
       osc.connect(gain);
@@ -87,11 +86,11 @@ class SoundSynthesizer {
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(1200, now);
     gain.gain.setValueAtTime(0.04, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.025);
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start(now);
-    osc.stop(now + 0.03);
+    osc.stop(now + 0.025);
   }
 }
 
@@ -102,59 +101,72 @@ class NSMApp {
     this.macros = [];
     this.activeMacroIds = new Set();
     this.currentFilter = 'all';
+    this.searchQuery = '';
     this.panicHotkey = 'f10';
     this.alwaysOnTop = false;
     this.totalActions = 0;
     this.isRecording = false;
 
+    // Updater state
+    this.currentVersion = '1.0.0';
+    this.pendingUpdate = null;
+
+    // Click tester state
+    this.benchClicks = 0;
+    this.benchPeakCPS = 0;
+    this.benchRecentClicks = [];
+
     this.initDOM();
     this.initEvents();
+    this.initPresetsLibrary();
     this.waitForApi();
   }
 
   initDOM() {
-    // Top Bar
-    this.soundIcon = document.getElementById('soundIcon');
-    this.pinIcon = document.getElementById('pinIcon');
+    // Header & Titlebar
+    this.appVersionBadge = document.getElementById('appVersionBadge');
+    this.versionLabel = document.getElementById('versionLabel');
+    this.btnHeaderUpdate = document.getElementById('btnHeaderUpdate');
     this.btnSoundToggle = document.getElementById('btnSoundToggle');
+    this.soundIcon = document.getElementById('soundIcon');
     this.btnPinToggle = document.getElementById('btnPinToggle');
+    this.pinIcon = document.getElementById('pinIcon');
     this.btnMinimize = document.getElementById('btnMinimize');
     this.btnClose = document.getElementById('btnClose');
 
-    // Telemetry
+    // Navigation
+    this.navTabs = document.querySelectorAll('.nav-tab');
+    this.tabPanes = document.querySelectorAll('.tab-pane');
+    this.btnPanicKill = document.getElementById('btnPanicKill');
+    this.panicKeyBadge = document.getElementById('panicKeyBadge');
+
+    // Dashboard Telemetry
     this.statusIndicator = document.getElementById('statusIndicator');
     this.statusText = document.getElementById('statusText');
     this.activeMacrosCount = document.getElementById('activeMacrosCount');
     this.totalActionsCount = document.getElementById('totalActionsCount');
     this.liveCPS = document.getElementById('liveCPS');
-    this.btnPanicKill = document.getElementById('btnPanicKill');
-    this.panicKeyBadge = document.getElementById('panicKeyBadge');
 
-    // Filters & Actions
-    this.filterBtns = document.querySelectorAll('.filter-btn');
+    // Filter Pills & Search
+    this.filterPills = document.querySelectorAll('.filter-pill');
     this.countAll = document.getElementById('countAll');
     this.countSpam = document.getElementById('countSpam');
     this.countHold = document.getElementById('countHold');
     this.countActive = document.getElementById('countActive');
-    this.btnResetPresets = document.getElementById('btnResetPresets');
-    this.btnNewMacro = document.getElementById('btnNewMacro');
+    this.macroSearchInput = document.getElementById('macroSearchInput');
+    this.btnGoToCreator = document.getElementById('btnGoToCreator');
     this.macrosGrid = document.getElementById('macrosGrid');
     this.emptyState = document.getElementById('emptyState');
     this.btnEmptyCreate = document.getElementById('btnEmptyCreate');
 
-    // Macro Modal
-    this.macroModal = document.getElementById('macroModal');
+    // Creator Form
     this.macroForm = document.getElementById('macroForm');
-    this.modalTitle = document.getElementById('modalTitle');
-    this.modalModeTag = document.getElementById('modalModeTag');
-    this.btnModalClose = document.getElementById('btnModalClose');
-    this.btnModalCancel = document.getElementById('btnModalCancel');
+    this.creatorTitle = document.getElementById('creatorTitle');
+    this.creatorModeTag = document.getElementById('creatorModeTag');
     this.macroId = document.getElementById('macroId');
     this.macroName = document.getElementById('macroName');
     this.macroColor = document.getElementById('macroColor');
     this.colorCode = document.getElementById('colorCode');
-
-    // Macro Form inputs
     this.typeSpamRadio = document.getElementById('typeSpamRadio');
     this.typeHoldRadio = document.getElementById('typeHoldRadio');
     this.targetType = document.getElementById('targetType');
@@ -163,10 +175,10 @@ class NSMApp {
     this.mouseButtonSelect = document.getElementById('mouseButtonSelect');
     this.keyboardKeyInput = document.getElementById('keyboardKeyInput');
 
+    // Timing Settings (Spam)
     this.spamSettingsGroup = document.getElementById('spamSettingsGroup');
-    this.holdSettingsGroup = document.getElementById('holdSettingsGroup');
     this.intervalSlider = document.getElementById('intervalSlider');
-    this.intervalMs = document.getElementById('intervalMs');
+    this.intervalValueDisplay = document.getElementById('intervalValueDisplay');
     this.cpsPreviewBadge = document.getElementById('cpsPreviewBadge');
     this.jitterSlider = document.getElementById('jitterSlider');
     this.jitterValBadge = document.getElementById('jitterValBadge');
@@ -176,70 +188,126 @@ class NSMApp {
     this.timeLimitGroup = document.getElementById('timeLimitGroup');
     this.timeLimitInput = document.getElementById('timeLimitInput');
 
+    // Timing Settings (Hold)
+    this.holdSettingsGroup = document.getElementById('holdSettingsGroup');
     this.holdSlider = document.getElementById('holdSlider');
-    this.holdDurationMs = document.getElementById('holdDurationMs');
+    this.holdValueDisplay = document.getElementById('holdValueDisplay');
     this.holdDurationHint = document.getElementById('holdDurationHint');
     this.releaseDelayMs = document.getElementById('releaseDelayMs');
     this.holdLoopCheckbox = document.getElementById('holdLoopCheckbox');
 
-    // Hotkey recording
+    // Hotkey Recording in Creator
     this.currentHotkeyDisplay = document.getElementById('currentHotkeyDisplay');
     this.btnRecordHotkey = document.getElementById('btnRecordHotkey');
     this.recordBtnText = document.getElementById('recordBtnText');
     this.macroHotkey = document.getElementById('macroHotkey');
+    this.btnCancelCreator = document.getElementById('btnCancelCreator');
 
-    // Panic Modal
-    this.panicModal = document.getElementById('panicModal');
-    this.btnPanicModalClose = document.getElementById('btnPanicModalClose');
-    this.currentPanicDisplay = document.getElementById('currentPanicDisplay');
-    this.btnRecordPanicKey = document.getElementById('btnRecordPanicKey');
-    this.recordPanicBtnText = document.getElementById('recordPanicBtnText');
+    // Presets Container
+    this.presetsCardsContainer = document.getElementById('presetsCardsContainer');
+    this.btnRestoreAllPresets = document.getElementById('btnRestoreAllPresets');
+
+    // Tester Bench
+    this.clickPad = document.getElementById('clickPad');
+    this.benchCurrentCPS = document.getElementById('benchCurrentCPS');
+    this.benchPeakCPS = document.getElementById('benchPeakCPS');
+    this.benchTotalClicks = document.getElementById('benchTotalClicks');
+    this.btnResetBench = document.getElementById('btnResetBench');
+
+    // Settings Tab
+    this.settingsCurrentVersion = document.getElementById('settingsCurrentVersion');
+    this.settingsLatestVersion = document.getElementById('settingsLatestVersion');
+    this.updateStatusPill = document.getElementById('updateStatusPill');
+    this.updateStatusText = document.getElementById('updateStatusText');
+    this.btnCheckUpdatesNow = document.getElementById('btnCheckUpdatesNow');
+    this.updateBtnIcon = document.getElementById('updateBtnIcon');
+    this.updateBtnText = document.getElementById('updateBtnText');
+    this.settingsPanicDisplay = document.getElementById('settingsPanicDisplay');
+    this.btnRecordSettingsPanic = document.getElementById('btnRecordSettingsPanic');
+    this.recordSettingsPanicText = document.getElementById('recordSettingsPanicText');
+    this.settingSoundToggle = document.getElementById('settingSoundToggle');
+    this.settingPinToggle = document.getElementById('settingPinToggle');
+
+    // Update Modal
+    this.updateModal = document.getElementById('updateModal');
+    this.btnCloseUpdateModal = document.getElementById('btnCloseUpdateModal');
+    this.btnCancelUpdate = document.getElementById('btnCancelUpdate');
+    this.btnStartAutoUpdate = document.getElementById('btnStartAutoUpdate');
+    this.updateVersionHeading = document.getElementById('updateVersionHeading');
+    this.updateChangelog = document.getElementById('updateChangelog');
+    this.downloadProgressContainer = document.getElementById('downloadProgressContainer');
+    this.downloadStatusLabel = document.getElementById('downloadStatusLabel');
+    this.downloadPercentLabel = document.getElementById('downloadPercentLabel');
+    this.downloadProgressFill = document.getElementById('downloadProgressFill');
   }
 
   initEvents() {
-    // Window Controls
+    // Window Buttons
     this.btnSoundToggle.addEventListener('click', () => this.toggleSound());
     this.btnPinToggle.addEventListener('click', () => this.togglePin());
     this.btnMinimize.addEventListener('click', () => this.api && this.api.minimize_window());
     this.btnClose.addEventListener('click', () => this.api && this.api.close_window());
 
-    // Panic Button: Click = Abort All, Double Click or Right Click = Edit Panic Key
-    this.btnPanicKill.addEventListener('click', (e) => {
+    // Navigation Tabs
+    this.navTabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        this.sound.playClick();
+        this.switchTab(tab.dataset.tab);
+      });
+    });
+
+    // Panic Killswitch Button
+    this.btnPanicKill.addEventListener('click', () => {
       this.sound.playPanic();
       if (this.api) this.api.stop_all();
     });
-    this.btnPanicKill.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      this.openPanicModal();
-    });
 
-    // Filters
-    this.filterBtns.forEach(btn => {
-      btn.addEventListener('click', () => {
+    // Version Badge click = check updates
+    this.appVersionBadge.addEventListener('click', () => {
+      this.switchTab('tabSettings');
+      this.checkUpdates(true);
+    });
+    this.btnHeaderUpdate.addEventListener('click', () => this.openUpdateModal());
+
+    // Filter Pills
+    this.filterPills.forEach(pill => {
+      pill.addEventListener('click', () => {
         this.sound.playClick();
-        this.filterBtns.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.currentFilter = btn.dataset.filter;
+        this.filterPills.forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        this.currentFilter = pill.dataset.filter;
         this.renderMacros();
       });
     });
 
-    // Actions
-    this.btnResetPresets.addEventListener('click', () => this.resetPresets());
-    this.btnNewMacro.addEventListener('click', () => this.openCreateModal());
-    this.btnEmptyCreate.addEventListener('click', () => this.openCreateModal());
+    // Search Input
+    this.macroSearchInput.addEventListener('input', (e) => {
+      this.searchQuery = e.target.value.toLowerCase().trim();
+      this.renderMacros();
+    });
 
-    // Modal Lifecycle
-    this.btnModalClose.addEventListener('click', () => this.closeModal());
-    this.btnModalCancel.addEventListener('click', () => this.closeModal());
-    this.btnPanicModalClose.addEventListener('click', () => this.closePanicModal());
+    // Go to Creator
+    this.btnGoToCreator.addEventListener('click', () => this.openCreateMode());
+    this.btnEmptyCreate.addEventListener('click', () => this.openCreateMode());
+    this.btnCancelCreator.addEventListener('click', () => this.switchTab('tabDashboard'));
 
-    // Macro Form Type Switch
+    // Creator Form Switching
     this.typeSpamRadio.addEventListener('change', () => this.updateFormType());
     this.typeHoldRadio.addEventListener('change', () => this.updateFormType());
-
-    // Target Switch
     this.targetType.addEventListener('change', () => this.updateTargetType());
+
+    // Color Swatches
+    document.querySelectorAll('.swatch').forEach(s => {
+      s.addEventListener('click', () => {
+        const c = s.dataset.color;
+        this.macroColor.value = c;
+        this.colorCode.textContent = c;
+        this.sound.playClick();
+      });
+    });
+    this.macroColor.addEventListener('input', (e) => {
+      this.colorCode.textContent = e.target.value;
+    });
 
     // Quick Keys
     document.querySelectorAll('.quick-chip').forEach(chip => {
@@ -249,68 +317,72 @@ class NSMApp {
       });
     });
 
-    // Color Picker
-    this.macroColor.addEventListener('input', (e) => {
-      this.colorCode.textContent = e.target.value;
-    });
-
-    // Sliders & Number Sync
+    // Sliders & Timings
     this.intervalSlider.addEventListener('input', (e) => {
-      this.intervalMs.value = e.target.value;
-      this.updateCPSPreview();
-    });
-    this.intervalMs.addEventListener('input', (e) => {
-      this.intervalSlider.value = e.target.value;
-      this.updateCPSPreview();
+      const ms = e.target.value;
+      this.intervalValueDisplay.textContent = `${ms} ms`;
+      const cps = (1000 / Math.max(1, ms)).toFixed(1);
+      this.cpsPreviewBadge.textContent = cps;
     });
 
-    // Quick CPS buttons
-    document.querySelectorAll('.btn-chip').forEach(btn => {
-      btn.addEventListener('click', () => {
-        document.querySelectorAll('.btn-chip').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        const interval = btn.dataset.interval;
-        this.intervalSlider.value = interval;
-        this.intervalMs.value = interval;
-        this.updateCPSPreview();
+    document.querySelectorAll('.cps-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.cps-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        const ms = pill.dataset.interval;
+        this.intervalSlider.value = ms;
+        this.intervalValueDisplay.textContent = `${ms} ms`;
+        const cps = (1000 / Math.max(1, ms)).toFixed(1);
+        this.cpsPreviewBadge.textContent = cps;
         this.sound.playClick();
       });
     });
 
-    // Jitter slider
     this.jitterSlider.addEventListener('input', (e) => {
       const v = e.target.value;
-      this.jitterValBadge.textContent = v == 0 ? '0% (Régulier)' : `±${v}% (Anti-Cheat)`;
+      this.jitterValBadge.textContent = v == 0 ? '0% (Cadence Régulière)' : `±${v}% (Fluctuation Anti-Bot)`;
     });
 
-    // Spam mode switch
     this.spamModeSelect.addEventListener('change', () => {
       const m = this.spamModeSelect.value;
       this.repeatCountGroup.style.display = m === 'repeat_count' ? 'flex' : 'none';
       this.timeLimitGroup.style.display = m === 'time_limit' ? 'flex' : 'none';
     });
 
-    // Hold Duration Sync
     this.holdSlider.addEventListener('input', (e) => {
-      this.holdDurationMs.value = e.target.value;
-      this.updateHoldDurationHint();
-    });
-    this.holdDurationMs.addEventListener('input', (e) => {
-      this.holdSlider.value = e.target.value;
-      this.updateHoldDurationHint();
+      const ms = parseInt(e.target.value);
+      this.holdValueDisplay.textContent = `${ms} ms`;
+      this.holdDurationHint.textContent = `(${(ms / 1000).toFixed(1)} secondes de maintien)`;
     });
 
-    // Record Hotkey
+    // Creator Hotkey Recording
     this.btnRecordHotkey.addEventListener('click', () => this.startRecordHotkey());
-    this.btnRecordPanicKey.addEventListener('click', () => this.startRecordPanicKey());
 
-    // Submit Macro Form
+    // Submit Creator Form
     this.macroForm.addEventListener('submit', (e) => {
       e.preventDefault();
       this.saveMacro();
     });
 
-    // Expose global callback hooks for Python backend
+    // Presets
+    this.btnRestoreAllPresets.addEventListener('click', () => this.restoreAllPresets());
+
+    // CPS Click Bench
+    this.clickPad.addEventListener('mousedown', () => this.recordBenchClick());
+    this.btnResetBench.addEventListener('click', () => this.resetBench());
+
+    // Settings
+    this.btnCheckUpdatesNow.addEventListener('click', () => this.checkUpdates(true));
+    this.btnRecordSettingsPanic.addEventListener('click', () => this.startRecordPanicKey());
+    this.settingSoundToggle.addEventListener('change', () => this.toggleSound());
+    this.settingPinToggle.addEventListener('change', () => this.togglePin());
+
+    // Update Modal
+    this.btnCloseUpdateModal.addEventListener('click', () => this.closeUpdateModal());
+    this.btnCancelUpdate.addEventListener('click', () => this.closeUpdateModal());
+    this.btnStartAutoUpdate.addEventListener('click', () => this.executeAutoUpdate());
+
+    // Global Python Event Handlers
     window.onMacroStateChange = (macroId, isRunning) => {
       if (macroId === '__ALL__') {
         this.activeMacroIds.clear();
@@ -334,8 +406,37 @@ class NSMApp {
       this.renderMacros();
     };
 
-    // Telemetry tick loop for CPS calculation
-    setInterval(() => this.updateCPS(), 800);
+    window.onUpdateAvailable = (updateInfo) => {
+      this.pendingUpdate = updateInfo;
+      this.updateStatusPill.className = 'status-pill yellow';
+      this.updateStatusPill.textContent = 'Mise à jour prête';
+      this.appVersionBadge.classList.add('has-update');
+      this.btnHeaderUpdate.style.display = 'inline-flex';
+      this.settingsLatestVersion.textContent = `v${updateInfo.latest_version}`;
+      this.updateStatusText.textContent = `Une version plus récente (v${updateInfo.latest_version}) est disponible.`;
+    };
+
+    window.onUpdateProgress = (percent, downloaded, total) => {
+      this.downloadProgressFill.style.width = `${percent}%`;
+      this.downloadPercentLabel.textContent = `${percent}%`;
+      const mb = (downloaded / (1024 * 1024)).toFixed(1);
+      const totalMb = (total / (1024 * 1024)).toFixed(1);
+      this.downloadStatusLabel.textContent = `Téléchargement : ${mb} / ${totalMb} Mo`;
+    };
+
+    window.onUpdateDownloaded = () => {
+      this.downloadStatusLabel.textContent = 'Téléchargement terminé ! Installation et redémarrage...';
+    };
+
+    // Live CPS interval ticker
+    setInterval(() => this.updateCPS(), 700);
+    // Bench CPS ticker
+    setInterval(() => this.benchTick(), 200);
+  }
+
+  switchTab(tabId) {
+    this.navTabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tabId));
+    this.tabPanes.forEach(p => p.classList.toggle('active', p.id === tabId));
   }
 
   waitForApi() {
@@ -353,6 +454,10 @@ class NSMApp {
   async loadInitialState() {
     try {
       const state = await this.api.get_initial_state();
+      this.currentVersion = state.version || '1.0.0';
+      this.versionLabel.textContent = `v${this.currentVersion}`;
+      this.settingsCurrentVersion.textContent = `v${this.currentVersion}`;
+
       this.macros = state.macros || [];
       this.activeMacroIds = new Set(state.active_macro_ids || []);
       this.panicHotkey = state.panic_hotkey || 'f10';
@@ -360,50 +465,104 @@ class NSMApp {
       this.sound.enabled = Boolean(state.sound_enabled);
       this.totalActions = state.total_actions || 0;
 
-      this.updateSoundIcon();
-      this.updatePinIcon();
-      this.panicKeyBadge.textContent = `TOUCHE [${this.panicHotkey.toUpperCase()}]`;
-      this.currentPanicDisplay.textContent = this.panicHotkey.toUpperCase();
+      this.soundIcon.textContent = this.sound.enabled ? '🔊' : '🔇';
+      this.settingSoundToggle.checked = this.sound.enabled;
+      this.pinIcon.style.color = this.alwaysOnTop ? 'var(--neon-cyan)' : 'var(--text-muted)';
+      this.settingPinToggle.checked = this.alwaysOnTop;
+
+      this.panicKeyBadge.textContent = this.panicHotkey.toUpperCase();
+      this.settingsPanicDisplay.textContent = this.panicHotkey.toUpperCase();
 
       this.updateTelemetry();
       this.renderMacros();
+
+      // Check for updates
+      this.checkUpdates(false);
     } catch (e) {
       console.error("Failed to load initial state:", e);
     }
   }
 
-  updateSoundIcon() {
-    this.soundIcon.textContent = this.sound.enabled ? '🔊' : '🔇';
-    this.btnSoundToggle.title = this.sound.enabled ? 'Couper le son' : 'Activer le son';
+  async checkUpdates(manual = false) {
+    if (manual) {
+      this.updateBtnIcon.style.animation = 'spin 1s linear infinite';
+      this.updateBtnText.textContent = 'Recherche en cours...';
+      this.sound.playClick();
+    }
+
+    try {
+      if (!this.api) return;
+      const res = await this.api.check_updates();
+      if (res && res.update_available) {
+        this.pendingUpdate = res;
+        this.updateStatusPill.className = 'status-pill yellow';
+        this.updateStatusPill.textContent = 'Mise à jour prête';
+        this.appVersionBadge.classList.add('has-update');
+        this.btnHeaderUpdate.style.display = 'inline-flex';
+        this.settingsLatestVersion.textContent = `v${res.latest_version}`;
+        this.updateStatusText.textContent = `Une version plus récente (v${res.latest_version}) est disponible.`;
+        if (manual) {
+          this.openUpdateModal();
+        }
+      } else {
+        this.updateStatusPill.className = 'status-pill green';
+        this.updateStatusPill.textContent = 'À jour';
+        this.appVersionBadge.classList.remove('has-update');
+        this.btnHeaderUpdate.style.display = 'none';
+        this.settingsLatestVersion.textContent = `v${this.currentVersion}`;
+        this.updateStatusText.textContent = `Vous disposez déjà de la version officielle la plus récente (v${this.currentVersion}).`;
+        if (manual) {
+          alert(`Félicitations ! Vous disposez déjà de la dernière version officielle de NSM (v${this.currentVersion}).`);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      if (manual) {
+        this.updateBtnIcon.style.animation = '';
+        this.updateBtnText.textContent = 'Vérifier les mises à jour maintenant';
+      }
+    }
+  }
+
+  openUpdateModal() {
+    if (!this.pendingUpdate) return;
+    this.updateVersionHeading.textContent = `NSM v${this.pendingUpdate.latest_version} est disponible`;
+    this.updateChangelog.textContent = this.pendingUpdate.release_notes || "Améliorations des performances et corrections de bugs.";
+    this.downloadProgressContainer.style.display = 'none';
+    this.btnStartAutoUpdate.style.display = 'inline-flex';
+    this.updateModal.style.display = 'flex';
+  }
+
+  closeUpdateModal() {
+    this.updateModal.style.display = 'none';
+  }
+
+  async executeAutoUpdate() {
+    if (!this.pendingUpdate || !this.pendingUpdate.download_url) return;
+    this.btnStartAutoUpdate.style.display = 'none';
+    this.downloadProgressContainer.style.display = 'flex';
+    this.downloadProgressFill.style.width = '0%';
+    this.downloadPercentLabel.textContent = '0%';
+    this.downloadStatusLabel.textContent = 'Démarrage du téléchargement...';
+
+    if (this.api) {
+      await this.api.start_auto_update(this.pendingUpdate.download_url);
+    }
   }
 
   async toggleSound() {
     this.sound.enabled = !this.sound.enabled;
-    this.updateSoundIcon();
+    this.soundIcon.textContent = this.sound.enabled ? '🔊' : '🔇';
+    this.settingSoundToggle.checked = this.sound.enabled;
     if (this.api) await this.api.toggle_sound();
-  }
-
-  updatePinIcon() {
-    this.pinIcon.style.color = this.alwaysOnTop ? 'var(--neon-cyan)' : 'var(--text-muted)';
   }
 
   async togglePin() {
     if (this.api) {
       this.alwaysOnTop = await this.api.toggle_always_on_top();
-      this.updatePinIcon();
-    }
-  }
-
-  async resetPresets() {
-    if (!confirm("Voulez-vous recharger tous les modèles de macro prédéfinis de Nexion Studio ?")) return;
-    if (this.api) {
-      const res = await this.api.reset_default_presets();
-      if (res && res.macros) {
-        this.macros = res.macros;
-        this.activeMacroIds.clear();
-        this.updateTelemetry();
-        this.renderMacros();
-      }
+      this.pinIcon.style.color = this.alwaysOnTop ? 'var(--neon-cyan)' : 'var(--text-muted)';
+      this.settingPinToggle.checked = this.alwaysOnTop;
     }
   }
 
@@ -413,7 +572,7 @@ class NSMApp {
 
     if (activeCount > 0) {
       this.statusIndicator.classList.add('active');
-      this.statusText.textContent = `${activeCount} EN COURS`;
+      this.statusText.textContent = `${activeCount} ACTIVE(S)`;
       this.statusText.style.color = 'var(--neon-green)';
     } else {
       this.statusIndicator.classList.remove('active');
@@ -421,7 +580,6 @@ class NSMApp {
       this.statusText.style.color = 'var(--text-main)';
     }
 
-    // Counts by category
     const spamCount = this.macros.filter(m => m.type === 'spam').length;
     const holdCount = this.macros.filter(m => m.type === 'hold').length;
 
@@ -438,7 +596,7 @@ class NSMApp {
       if (m && m.type === 'spam') {
         const interval = Math.max(1, m.interval_ms || 20);
         totalCps += (1000 / interval);
-        this.totalActions += Math.round(totalCps * 0.8);
+        this.totalActions += Math.round((1000 / interval) * 0.7);
       } else if (m && m.type === 'hold') {
         totalCps += 1;
         this.totalActions += 1;
@@ -451,12 +609,20 @@ class NSMApp {
 
   renderMacros() {
     let filtered = this.macros;
+
     if (this.currentFilter === 'spam') {
-      filtered = this.macros.filter(m => m.type === 'spam');
+      filtered = filtered.filter(m => m.type === 'spam');
     } else if (this.currentFilter === 'hold') {
-      filtered = this.macros.filter(m => m.type === 'hold');
+      filtered = filtered.filter(m => m.type === 'hold');
     } else if (this.currentFilter === 'active') {
-      filtered = this.macros.filter(m => this.activeMacroIds.has(m.id));
+      filtered = filtered.filter(m => this.activeMacroIds.has(m.id));
+    }
+
+    if (this.searchQuery) {
+      filtered = filtered.filter(m => 
+        (m.name || '').toLowerCase().includes(this.searchQuery) ||
+        (m.hotkey || '').toLowerCase().includes(this.searchQuery)
+      );
     }
 
     if (filtered.length === 0) {
@@ -475,8 +641,8 @@ class NSMApp {
       card.dataset.id = m.id;
 
       const isSpam = m.type === 'spam';
-      const typeLabel = isSpam ? '⚡ SPAM' : '⏳ MAINTIEN';
-      const typeClass = isSpam ? '' : 'hold';
+      const badgeText = isSpam ? '⚡ SPAM' : '⏳ MAINTIEN';
+      const badgeClass = isSpam ? '' : 'hold';
 
       let targetLabel = '';
       if (m.target_type === 'mouse') {
@@ -486,58 +652,64 @@ class NSMApp {
         targetLabel = `⌨️ Touche [${(m.target_key || 'E').toUpperCase()}]`;
       }
 
-      let speedLabel = '';
+      let speedSummary = '';
       if (isSpam) {
         const cps = (1000 / Math.max(1, m.interval_ms || 20)).toFixed(0);
-        speedLabel = `${m.interval_ms}ms (${cps} CPS)`;
+        speedSummary = `${m.interval_ms} ms (${cps} CPS)`;
       } else {
         const s = (m.hold_duration_ms / 1000).toFixed(1);
-        speedLabel = `Hold: ${s}s`;
+        speedSummary = `Maintien : ${s}s`;
       }
 
       card.innerHTML = `
         <div class="macro-card-accent" style="background: ${m.color || 'var(--neon-cyan)'}"></div>
-        <div class="card-header">
+        <div class="card-top-row">
           <div class="card-title-group">
-            <span class="macro-type-badge ${typeClass}">${typeLabel}</span>
+            <div class="card-pills-row">
+              <span class="macro-badge ${badgeClass}">${badgeText}</span>
+              <span class="keycap trigger">[${(m.hotkey || 'AUCUN').toUpperCase()}]</span>
+            </div>
             <h3 class="macro-name">${this.escapeHtml(m.name)}</h3>
           </div>
-          <div class="card-header-actions">
-            <button class="card-icon-btn edit" title="Modifier" data-action="edit">✏️</button>
-            <button class="card-icon-btn copy" title="Dupliquer" data-action="duplicate">📋</button>
-            <button class="card-icon-btn delete" title="Supprimer" data-action="delete">🗑️</button>
+          <label class="macro-switch" title="Activer / Désactiver">
+            <input type="checkbox" ${isActive ? 'checked' : ''} data-action="switch">
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+
+        <div class="card-details-box">
+          <div class="card-detail-item">
+            <span class="card-detail-lbl">CIBLE</span>
+            <span class="keycap">${targetLabel}</span>
+          </div>
+          <div class="card-detail-item">
+            <span class="card-detail-lbl">DÉCLENCHEMENT</span>
+            <span class="keycap">${m.mode === 'hold_key' ? 'Maintien raccourci' : 'Bascule On/Off'}</span>
           </div>
         </div>
 
-        <div class="card-details">
-          <div class="detail-item">
-            <span class="detail-label">CIBLE SIMULÉE</span>
-            <span class="detail-val key-chip">${targetLabel}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">RACCOURCI CLAVIER</span>
-            <span class="detail-val hotkey-chip">[${(m.hotkey || 'NON DÉFINI').toUpperCase()}]</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">VITESSE / TEMPS</span>
-            <span class="detail-val">${speedLabel}</span>
-          </div>
-          <div class="detail-item">
-            <span class="detail-label">MODE</span>
-            <span class="detail-val">${m.mode === 'hold_key' ? 'Maintien raccourci' : 'Bascule (Toggle)'}</span>
+        <div class="card-footer-row">
+          <span class="speed-meter-summary">${speedSummary}</span>
+          <div class="card-action-btns">
+            <button class="card-btn" title="Modifier" data-action="edit">✏️</button>
+            <button class="card-btn" title="Dupliquer" data-action="copy">📋</button>
+            <button class="card-btn del" title="Supprimer" data-action="del">🗑️</button>
           </div>
         </div>
-
-        <button class="macro-toggle-btn ${isActive ? 'running' : ''}" data-action="toggle">
-          <span>${isActive ? '⏹️ ARRÊTER LA MACRO' : '▶️ DÉMARRER LA MACRO'}</span>
-        </button>
       `;
 
-      // Event handlers
-      card.querySelector('[data-action="toggle"]').addEventListener('click', () => this.toggleMacro(m.id));
-      card.querySelector('[data-action="edit"]').addEventListener('click', () => this.openEditModal(m));
-      card.querySelector('[data-action="duplicate"]').addEventListener('click', () => this.duplicateMacro(m));
-      card.querySelector('[data-action="delete"]').addEventListener('click', () => this.deleteMacro(m.id));
+      // Switch toggle event
+      const sw = card.querySelector('[data-action="switch"]');
+      sw.addEventListener('change', (e) => {
+        this.sound.playClick();
+        if (this.api) {
+          this.api.toggle_macro(m.id);
+        }
+      });
+
+      card.querySelector('[data-action="edit"]').addEventListener('click', () => this.openEditMode(m));
+      card.querySelector('[data-action="copy"]').addEventListener('click', () => this.duplicateMacro(m));
+      card.querySelector('[data-action="del"]').addEventListener('click', () => this.deleteMacro(m.id));
 
       this.macrosGrid.appendChild(card);
     });
@@ -546,13 +718,6 @@ class NSMApp {
   escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-
-  async toggleMacro(macroId) {
-    this.sound.playClick();
-    if (this.api) {
-      await this.api.toggle_macro(macroId);
-    }
   }
 
   async deleteMacro(macroId) {
@@ -571,7 +736,7 @@ class NSMApp {
     const clone = JSON.parse(JSON.stringify(macro));
     clone.id = 'macro_' + Date.now();
     clone.name = `${clone.name} (Copie)`;
-    clone.hotkey = ''; // Clear hotkey to avoid collision
+    clone.hotkey = '';
     if (this.api) {
       await this.api.save_macro(clone);
       this.macros.push(clone);
@@ -581,10 +746,10 @@ class NSMApp {
     }
   }
 
-  openCreateModal() {
+  openCreateMode() {
     this.sound.playClick();
-    this.modalTitle.textContent = "Nouvelle Macro";
-    this.modalModeTag.textContent = "CRÉATION";
+    this.creatorTitle.textContent = "Créer une Nouvelle Macro";
+    this.creatorModeTag.textContent = "CRÉATION STUDIO";
     this.macroId.value = '';
     this.macroName.value = `Macro #${this.macros.length + 1}`;
     this.macroColor.value = '#00f2fe';
@@ -596,13 +761,15 @@ class NSMApp {
     this.keyboardKeyInput.value = 'e';
 
     this.intervalSlider.value = 20;
-    this.intervalMs.value = 20;
+    this.intervalValueDisplay.textContent = '20 ms';
+    this.cpsPreviewBadge.textContent = '50.0';
     this.jitterSlider.value = 0;
-    this.jitterValBadge.textContent = '0% (Régulier)';
+    this.jitterValBadge.textContent = '0% (Cadence Régulière)';
     this.spamModeSelect.value = 'toggle';
 
     this.holdSlider.value = 3000;
-    this.holdDurationMs.value = 3000;
+    this.holdValueDisplay.textContent = '3000 ms';
+    this.holdDurationHint.textContent = '(3.0 secondes de maintien)';
     this.releaseDelayMs.value = 50;
     this.holdLoopCheckbox.checked = true;
 
@@ -611,16 +778,13 @@ class NSMApp {
 
     this.updateFormType();
     this.updateTargetType();
-    this.updateCPSPreview();
-    this.updateHoldDurationHint();
-
-    this.macroModal.style.display = 'flex';
+    this.switchTab('tabCreator');
   }
 
-  openEditModal(macro) {
+  openEditMode(macro) {
     this.sound.playClick();
-    this.modalTitle.textContent = "Modifier la Macro";
-    this.modalModeTag.textContent = "ÉDITION";
+    this.creatorTitle.textContent = "Modifier la Macro";
+    this.creatorModeTag.textContent = "ÉDITION STUDIO";
     this.macroId.value = macro.id;
     this.macroName.value = macro.name;
     this.macroColor.value = macro.color || '#00f2fe';
@@ -639,16 +803,22 @@ class NSMApp {
       this.keyboardKeyInput.value = macro.target_key || 'e';
     }
 
-    this.intervalSlider.value = macro.interval_ms || 20;
-    this.intervalMs.value = macro.interval_ms || 20;
+    const interval = macro.interval_ms || 20;
+    this.intervalSlider.value = interval;
+    this.intervalValueDisplay.textContent = `${interval} ms`;
+    this.cpsPreviewBadge.textContent = (1000 / Math.max(1, interval)).toFixed(1);
+
     this.jitterSlider.value = macro.jitter_percent || 0;
-    this.jitterValBadge.textContent = (macro.jitter_percent || 0) == 0 ? '0% (Régulier)' : `±${macro.jitter_percent}% (Anti-Cheat)`;
+    this.jitterValBadge.textContent = (macro.jitter_percent || 0) == 0 ? '0% (Cadence Régulière)' : `±${macro.jitter_percent}% (Fluctuation Anti-Bot)`;
+
     this.spamModeSelect.value = macro.mode || 'toggle';
     this.repeatCountInput.value = macro.repeat_count || 100;
     this.timeLimitInput.value = macro.time_limit_sec || 10;
 
-    this.holdSlider.value = macro.hold_duration_ms || 3000;
-    this.holdDurationMs.value = macro.hold_duration_ms || 3000;
+    const holdMs = macro.hold_duration_ms || 3000;
+    this.holdSlider.value = holdMs;
+    this.holdValueDisplay.textContent = `${holdMs} ms`;
+    this.holdDurationHint.textContent = `(${(holdMs / 1000).toFixed(1)} secondes de maintien)`;
     this.releaseDelayMs.value = macro.release_delay_ms || 50;
     this.holdLoopCheckbox.checked = macro.loop !== false;
 
@@ -657,20 +827,7 @@ class NSMApp {
 
     this.updateFormType();
     this.updateTargetType();
-    this.updateCPSPreview();
-    this.updateHoldDurationHint();
-
-    this.macroModal.style.display = 'flex';
-  }
-
-  closeModal() {
-    this.macroModal.style.display = 'none';
-    if (this.isRecording && this.api) {
-      this.api.cancel_record_hotkey();
-      this.isRecording = false;
-      this.btnRecordHotkey.classList.remove('recording');
-      this.recordBtnText.textContent = "Modifier le raccourci";
-    }
+    this.switchTab('tabCreator');
   }
 
   updateFormType() {
@@ -685,36 +842,24 @@ class NSMApp {
     this.keyboardKeyGroup.style.display = isMouse ? 'none' : 'flex';
   }
 
-  updateCPSPreview() {
-    const ms = Math.max(1, parseInt(this.intervalMs.value) || 20);
-    const cps = (1000 / ms).toFixed(1);
-    this.cpsPreviewBadge.textContent = `${cps} CPS`;
-  }
-
-  updateHoldDurationHint() {
-    const ms = parseInt(this.holdDurationMs.value) || 3000;
-    const s = (ms / 1000).toFixed(1);
-    this.holdDurationHint.textContent = `${s} seconde(s) d'appui continu`;
-  }
-
   async startRecordHotkey() {
     this.sound.playClick();
-    this.isRecording = true;
     this.btnRecordHotkey.classList.add('recording');
     this.recordBtnText.textContent = "Appuyez sur une touche...";
 
     try {
-      const key = await this.api.record_hotkey();
-      if (key) {
-        this.macroHotkey.value = key;
-        this.currentHotkeyDisplay.textContent = key.toUpperCase();
+      if (this.api) {
+        const key = await this.api.record_hotkey();
+        if (key) {
+          this.macroHotkey.value = key;
+          this.currentHotkeyDisplay.textContent = key.toUpperCase();
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
-      this.isRecording = false;
       this.btnRecordHotkey.classList.remove('recording');
-      this.recordBtnText.textContent = "Modifier le raccourci";
+      this.recordBtnText.textContent = "Enregistrer un Raccourci";
     }
   }
 
@@ -724,7 +869,7 @@ class NSMApp {
 
     const macroData = {
       id: this.macroId.value || 'macro_' + Date.now(),
-      name: this.macroName.value.trim() || 'Sans Nom',
+      name: this.macroName.value.trim() || 'Macro sans nom',
       color: this.macroColor.value,
       type: isSpam ? 'spam' : 'hold',
       enabled: true,
@@ -734,14 +879,14 @@ class NSMApp {
     };
 
     if (isSpam) {
-      macroData.interval_ms = Math.max(1, parseInt(this.intervalMs.value) || 20);
+      macroData.interval_ms = Math.max(1, parseInt(this.intervalSlider.value) || 20);
       macroData.jitter_percent = parseInt(this.jitterSlider.value) || 0;
       macroData.click_hold_ms = 5;
       macroData.mode = this.spamModeSelect.value;
       macroData.repeat_count = parseInt(this.repeatCountInput.value) || 0;
       macroData.time_limit_sec = parseFloat(this.timeLimitInput.value) || 0;
     } else {
-      macroData.hold_duration_ms = Math.max(50, parseInt(this.holdDurationMs.value) || 3000);
+      macroData.hold_duration_ms = Math.max(50, parseInt(this.holdSlider.value) || 3000);
       macroData.release_delay_ms = Math.max(10, parseInt(this.releaseDelayMs.value) || 50);
       macroData.loop = this.holdLoopCheckbox.checked;
       macroData.repeat_count = 0;
@@ -757,43 +902,209 @@ class NSMApp {
       }
       this.updateTelemetry();
       this.renderMacros();
-      this.closeModal();
+      this.switchTab('tabDashboard');
       this.sound.playClick();
     }
   }
 
-  // Panic Modal
-  openPanicModal() {
-    this.panicModal.style.display = 'flex';
+  // Presets Library
+  initPresetsLibrary() {
+    const presets = [
+      {
+        name: "⚡ Ultra Autoclicker 50 CPS",
+        desc: "Clic gauche cadencé à 20ms pour les jeux PvP exigeant un CPS maximal sans aucun temps mort.",
+        icon: "⚡",
+        details: "Souris Gauche • 20ms • 50 CPS",
+        data: {
+          name: "⚡ Autoclicker 50 CPS",
+          type: "spam",
+          target_type: "mouse",
+          target_key: "left",
+          interval_ms: 20,
+          jitter_percent: 0,
+          mode: "toggle",
+          hotkey: "f6",
+          color: "#00f2fe"
+        }
+      },
+      {
+        name: "🎯 Rapid Fire Anti-Cheat ~14 CPS",
+        desc: "Spam avec fluctuation aléatoire simulant fidèlement la cadence d'un doigt humain.",
+        icon: "🎯",
+        details: "Souris Gauche • 70ms ±25% Jitter",
+        data: {
+          name: "🎯 Rapid Fire Anti-Cheat",
+          type: "spam",
+          target_type: "mouse",
+          target_key: "left",
+          interval_ms: 70,
+          jitter_percent: 25,
+          mode: "toggle",
+          hotkey: "f7",
+          color: "#9d4edd"
+        }
+      },
+      {
+        name: "🏃 Maintien Shift Continu (Sprint / Sneak)",
+        desc: "Garde la touche Shift constamment enfoncée pour courir ou s'accroupir sans fatigue.",
+        icon: "🏃",
+        details: "Clavier Shift • Maintien 5s en boucle",
+        data: {
+          name: "🏃 Maintien Shift Continu",
+          type: "hold",
+          target_type: "keyboard",
+          target_key: "shift",
+          hold_duration_ms: 5000,
+          release_delay_ms: 50,
+          loop: true,
+          hotkey: "f8",
+          color: "#00f5a0"
+        }
+      },
+      {
+        name: "⌨️ Spam Touche E (Loot / Interaction)",
+        desc: "Idéal pour ramasser le loot instantanément ou marteler les QTE et portes dans les jeux.",
+        icon: "⌨️",
+        details: "Clavier E • 30ms",
+        data: {
+          name: "⌨️ Spam Touche E (Loot)",
+          type: "spam",
+          target_type: "keyboard",
+          target_key: "e",
+          interval_ms: 30,
+          jitter_percent: 5,
+          mode: "toggle",
+          hotkey: "f9",
+          color: "#f72585"
+        }
+      },
+      {
+        name: "🦘 AFK Anti-Kick (Saut 45s)",
+        desc: "Saute régulièrement pour éviter d'être expulsé des serveurs lors d'une absence.",
+        icon: "🦘",
+        details: "Clavier Espace • Toutes les 45s",
+        data: {
+          name: "🦘 AFK Anti-Kick",
+          type: "spam",
+          target_type: "keyboard",
+          target_key: "space",
+          interval_ms: 45000,
+          jitter_percent: 10,
+          mode: "toggle",
+          hotkey: "f4",
+          color: "#ffbe0b"
+        }
+      }
+    ];
+
+    this.presetsCardsContainer.innerHTML = '';
+    presets.forEach(p => {
+      const card = document.createElement('div');
+      card.className = 'preset-card';
+      card.innerHTML = `
+        <div class="preset-header">
+          <span class="preset-icon">${p.icon}</span>
+          <span class="preset-name">${p.name}</span>
+        </div>
+        <p class="preset-desc">${p.desc}</p>
+        <span class="preset-details">${p.details}</span>
+      `;
+      card.addEventListener('click', () => this.injectPreset(p.data));
+      this.presetsCardsContainer.appendChild(card);
+    });
   }
 
-  closePanicModal() {
-    this.panicModal.style.display = 'none';
+  async injectPreset(data) {
+    this.sound.playClick();
+    const newMacro = {
+      ...data,
+      id: 'macro_' + Date.now(),
+      enabled: true
+    };
+    if (this.api) {
+      await this.api.save_macro(newMacro);
+      this.macros.push(newMacro);
+      this.updateTelemetry();
+      this.renderMacros();
+      this.switchTab('tabDashboard');
+    }
   }
 
+  async restoreAllPresets() {
+    if (!confirm("Voulez-vous réinitialiser toutes vos macros avec les modèles par défaut de Nexion Studio ?")) return;
+    this.sound.playClick();
+    if (this.api) {
+      const res = await this.api.reset_default_presets();
+      if (res && res.macros) {
+        this.macros = res.macros;
+        this.activeMacroIds.clear();
+        this.updateTelemetry();
+        this.renderMacros();
+        this.switchTab('tabDashboard');
+      }
+    }
+  }
+
+  // CPS Click Bench
+  recordBenchClick() {
+    this.benchClicks++;
+    this.benchRecentClicks.push(Date.now());
+    this.sound.playClick();
+
+    // Trigger visual pulse
+    this.clickPad.style.transform = 'scale(0.98)';
+    setTimeout(() => { this.clickPad.style.transform = ''; }, 60);
+  }
+
+  benchTick() {
+    const now = Date.now();
+    this.benchRecentClicks = this.benchRecentClicks.filter(t => now - t <= 1000);
+    const cps = this.benchRecentClicks.length;
+    this.benchCurrentCPS.textContent = cps.toFixed(1);
+    this.benchTotalClicks.textContent = this.benchClicks;
+
+    if (cps > this.benchPeakCPS) {
+      this.benchPeakCPS = cps;
+      this.benchPeakCPS.textContent = this.benchPeakCPS.toFixed(1);
+    }
+  }
+
+  resetBench() {
+    this.benchClicks = 0;
+    this.benchPeakCPS = 0;
+    this.benchRecentClicks = [];
+    this.benchCurrentCPS.textContent = '0.0';
+    this.benchPeakCPS.textContent = '0.0';
+    this.benchTotalClicks.textContent = '0';
+    this.sound.playClick();
+  }
+
+  // Panic Hotkey Recording in Settings
   async startRecordPanicKey() {
     this.sound.playClick();
-    this.btnRecordPanicKey.classList.add('recording');
-    this.recordPanicBtnText.textContent = "Appuyez sur une touche...";
+    this.btnRecordSettingsPanic.classList.add('recording');
+    this.recordSettingsPanicText.textContent = "Appuyez sur une touche...";
 
     try {
-      const key = await this.api.record_hotkey();
-      if (key) {
-        await this.api.set_panic_hotkey(key);
-        this.panicHotkey = key;
-        this.currentPanicDisplay.textContent = key.toUpperCase();
-        this.panicKeyBadge.textContent = `TOUCHE [${key.toUpperCase()}]`;
+      if (this.api) {
+        const key = await this.api.record_hotkey();
+        if (key) {
+          await this.api.set_panic_hotkey(key);
+          this.panicHotkey = key;
+          this.panicKeyBadge.textContent = key.toUpperCase();
+          this.settingsPanicDisplay.textContent = key.toUpperCase();
+        }
       }
     } catch (e) {
       console.error(e);
     } finally {
-      this.btnRecordPanicKey.classList.remove('recording');
-      this.recordPanicBtnText.textContent = "Modifier la touche";
+      this.btnRecordSettingsPanic.classList.remove('recording');
+      this.recordSettingsPanicText.textContent = "Modifier la touche d'arrêt";
     }
   }
 }
 
-// Instantiate on DOM load
+// Initialize on DOM load
 window.addEventListener('DOMContentLoaded', () => {
   window.app = new NSMApp();
 });

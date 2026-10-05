@@ -51,13 +51,12 @@ def build():
 
     exe_file = os.path.join(dist_dir, "NSM.exe")
 
-    # Step 1: Check or compile PyInstaller executable
-    if not os.path.exists(exe_file):
-        print("\n[1/2] Compiling NSM application with PyInstaller...")
-        pyinstaller_cmd = [
-            sys.executable, "-m", "PyInstaller",
-            "--noconsole",
-            "--name", "NSM",
+    # Step 1: Compile PyInstaller executable
+    print("\n[1/2] Compiling NSM application with PyInstaller...")
+    pyinstaller_cmd = [
+        sys.executable, "-m", "PyInstaller",
+        "--noconsole",
+        "--name", "NSM",
             "--icon", os.path.join("assets", "logo.ico"),
             "--add-data", "web;web",
             "--add-data", "assets;assets",
@@ -69,15 +68,13 @@ def build():
             "-y",
             "main.py"
         ]
-        ret = subprocess.run(pyinstaller_cmd, cwd=base_dir)
-        if ret.returncode != 0:
-            print("\n❌ Error: PyInstaller compilation failed!")
-            sys.exit(1)
-    else:
-        print("\n[1/2] NSM.exe executable already built and verified!")
+    ret = subprocess.run(pyinstaller_cmd, cwd=base_dir)
+    if ret.returncode != 0:
+        print("\n[!] Error: PyInstaller compilation failed!")
+        sys.exit(1)
 
     if not os.path.exists(exe_file):
-        print(f"\n❌ Error: Executable not found at {exe_file}")
+        print(f"\n[!] Error: Executable not found at {exe_file}")
         sys.exit(1)
 
     print(f"  [+] Executable ready: {exe_file} ({format_size(os.path.getsize(exe_file))})")

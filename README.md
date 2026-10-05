@@ -49,11 +49,18 @@
 - Mode en boucle continue ou appui unique.
 - Idéal pour les courses automatiques, le minage continu, les tirs chargés ou l'AFK anti-kick.
 
-### 3. 🛡️ Arrêt d'Urgence & Sécurité
-- Bouton rouge et raccourci global d'urgence (**Touche F10** modifiable à tout moment).
-- Remise à zéro immédiate de l'état des touches pour empêcher tout blocage ou bug clavier.
+### 3. 🚀 Système de Mise à Jour Automatique (Auto-Updater)
+- **Détection automatique GitHub** : Le logiciel vérifie automatiquement à l'ouverture si une nouvelle version est disponible sur le dépôt GitHub officiel.
+- **Mise à jour en 1 clic** : Téléchargement automatique de l'installeur en arrière-plan avec barre de progression en temps réel, installation silencieuse et redémarrage automatique. Aucun téléchargement manuel requis !
 
-### 4. 🎛️ Modèles Prédéfinis Intégrés (Nexion Studio)
+### 4. 🎯 Zone de Test & Benchmark CPS Intégrée
+- Permet de tester vos macros et mesurer votre CPS réel (clics par seconde) directement dans l'application avec un pavé interactif et un historique des pics de vitesse.
+
+### 5. 🛡️ Arrêt d'Urgence & Sécurité Anti-Répétition
+- **Filtrage anti-rebond (Debounce)** : Élimine les répétitions automatiques intempestives du clavier Windows afin que le mode Bascule (On/Off) reste parfaitement stable.
+- **Touche d'urgence Killswitch (F10)** : Remise à zéro immédiate de l'état des touches pour empêcher tout blocage ou bug clavier.
+
+### 6. 🎛️ Modèles Prédéfinis Intégrés (Nexion Studio)
 L'application intègre dès le premier lancement des modèles prêts à l'emploi :
 - ⚡ **Autoclicker Souris Gauche (50 CPS)** — `[F6]`
 - 🎯 **Spam Humain Anti-Détection (~14 CPS + Jitter)** — `[F7]`
